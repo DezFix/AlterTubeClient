@@ -138,8 +138,10 @@ public class MainActivity extends AppCompatActivity {
 
         ThemeHelper.setDayNightMode(this);
         ThemeHelper.setTheme(this, ServiceHelper.getSelectedServiceId(this));
+        super.onCreate(savedInstanceState);
 
         // First run goes to the single Welcome screen (2 questions), not a stack of popups.
+        // NB: must stay after super.onCreate(), otherwise SuperNotCalledException.
         if (PreferenceManager.getDefaultSharedPreferences(this).getInt("isFirstRun", 0) == 0) {
             startActivity(new Intent(this, WelcomeActivity.class));
             finish();
@@ -147,7 +149,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         assureCorrectAppLanguage(this);
-        super.onCreate(savedInstanceState);
 
         mainBinding = ActivityMainBinding.inflate(getLayoutInflater());
         drawerLayoutBinding = mainBinding.drawerLayout;
