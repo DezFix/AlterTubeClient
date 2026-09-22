@@ -145,7 +145,9 @@ class FeedImportExportItem(
 
                 itemView.setOnClickListener { onImportFromServiceSelected(service.serviceId) }
             } catch (e: ExtractionException) {
-                throw RuntimeException("Services array contains an entry that it's not a valid service name ($serviceName)", e)
+                // Unknown service in the list (e.g. removed service): skip the row,
+                // never crash the whole screen (see ALTERTUBE-1).
+                continue
             }
         }
     }
