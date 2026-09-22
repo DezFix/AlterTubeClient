@@ -72,7 +72,7 @@ public class RecommendedFragment extends Fragment {
             final StreamInfoItem item = adapter.getItem(position);
             NavigationHelper.openVideoDetailFragment(requireContext(),
                     getParentFragmentManager(),
-                    item.getServiceId(), item.getUrl(), item.getName());
+                    item.getServiceId(), item.getUrl(), item.getName(), null, false);
         });
         binding.recommendedList.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recommendedList.setAdapter(adapter);
