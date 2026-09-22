@@ -264,6 +264,9 @@
     <string name="shorts_error_loading">Couldn\'t load Shorts</string>
     <string name="shorts_mute">Sound on/off</string>
     <string name="shorts_autoadvance">Auto-advance to next Short</string>
+    <string name="recommended_tab_title">Recommended</string>
+    <string name="recommended_error">No recommendations yet — watch some videos first</string>
+    <string name="music_tab_title">Music</string>
 <string name="short_thousand">k</string>
 <string name="short_million">M</string>
 <string name="short_billion">B</string>
