@@ -29,36 +29,31 @@ public final class TabsManager {
 
     /** Bumped when the default tab set changes: migrates stored tabs once. */
     private static final String TABS_SCHEME_KEY = "altertube_tabs_scheme";
-    /** v2: [Feed, Shorts, Subscriptions, History] (was Trending-first). */
-    private static final int TABS_SCHEME_V2 = 2;
+    /**
+     * v3: stored tabs are replaced with fresh defaults once, so removals
+     * (e.g. Trending) also apply to existing installs. Afterwards the user
+     * owns the order completely.
+     */
+    private static final int TABS_SCHEME_V3 = 3;
 
     public List<Tab> getTabs() {
         final String savedJson = sharedPreferences.getString(savedTabsKey, null);
         try {
-            final List<Tab> tabs = TabsJsonHelper.getTabsFromJson(savedJson);
-            if (savedJson != null && !savedJson.isEmpty() && needsSchemeMigration(tabs)) {
+            if (savedJson != null && !savedJson.isEmpty() && needsSchemeMigration()) {
                 final List<Tab> fresh = getDefaultTabs();
                 saveTabs(fresh);
-                sharedPreferences.edit().putInt(TABS_SCHEME_KEY, TABS_SCHEME_V2).apply();
+                sharedPreferences.edit().putInt(TABS_SCHEME_KEY, TABS_SCHEME_V3).apply();
                 return fresh;
             }
-            return tabs;
+            return TabsJsonHelper.getTabsFromJson(savedJson);
         } catch (final TabsJsonHelper.InvalidJsonException e) {
             Toast.makeText(context, R.string.saved_tabs_invalid_json, Toast.LENGTH_SHORT).show();
             return getDefaultTabs();
         }
     }
 
-    private boolean needsSchemeMigration(final List<Tab> tabs) {
-        if (sharedPreferences.getInt(TABS_SCHEME_KEY, 0) >= TABS_SCHEME_V2) {
-            return false;
-        }
-        for (final Tab tab : tabs) {
-            if (tab.getTabId() == Tab.ShortsTab.ID) {
-                return false; // already on the new scheme (or user re-added Shorts)
-            }
-        }
-        return true;
+    private boolean needsSchemeMigration() {
+        return sharedPreferences.getInt(TABS_SCHEME_KEY, 0) < TABS_SCHEME_V3;
     }
 
     public void saveTabs(final List<Tab> tabList) {

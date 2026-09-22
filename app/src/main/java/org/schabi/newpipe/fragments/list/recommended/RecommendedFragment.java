@@ -8,7 +8,6 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.LinearLayoutManager;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.FragmentRecommendedBinding;
@@ -18,6 +17,7 @@ import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.local.history.HistoryRecordManager;
 import org.schabi.newpipe.database.history.model.StreamHistoryEntry;
+import org.schabi.newpipe.util.ContentFilter;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.NavigationHelper;
 
@@ -74,7 +74,8 @@ public class RecommendedFragment extends Fragment {
                     getParentFragmentManager(),
                     item.getServiceId(), item.getUrl(), item.getName(), null, false);
         });
-        binding.recommendedList.setLayoutManager(new LinearLayoutManager(requireContext()));
+        binding.recommendedList.setLayoutManager(
+                new androidx.recyclerview.widget.GridLayoutManager(requireContext(), 2));
         binding.recommendedList.setAdapter(adapter);
         binding.recommendedRetryButton.setOnClickListener(v -> load());
 
@@ -147,6 +148,10 @@ public class RecommendedFragment extends Fragment {
                         }
                         final StreamInfoItem item = (StreamInfoItem) related;
                         if (item.getUrl() == null || !seen.add(item.getUrl())) {
+                            continue;
+                        }
+                        if (ContentFilter.isPoliticsBlocked(
+                                item.getName(), item.getUploaderName())) {
                             continue;
                         }
                         out.add(item);

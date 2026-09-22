@@ -21,6 +21,7 @@ import org.schabi.newpipe.extractor.search.filter.FilterItem;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.fragments.list.recommended.RecommendedAdapter;
 import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
+import org.schabi.newpipe.util.ContentFilter;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.NavigationHelper;
 
@@ -41,7 +42,8 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
  */
 public class MusicFragment extends Fragment {
 
-    private static final String[] MUSIC_QUERIES = {"music", "music videos"};
+    private static final String[] MUSIC_QUERIES =
+            {"new music videos", "top music videos this week", "latest music releases"};
 
     private FragmentRecommendedBinding binding;
     private RecommendedAdapter adapter;
@@ -159,9 +161,15 @@ public class MusicFragment extends Fragment {
                             Collections.emptyList()));
             final List<StreamInfoItem> out = new ArrayList<>();
             for (final InfoItem item : info.getRelatedItems()) {
-                if (item instanceof StreamInfoItem) {
-                    out.add((StreamInfoItem) item);
+                if (!(item instanceof StreamInfoItem)) {
+                    continue;
                 }
+                final StreamInfoItem streamItem = (StreamInfoItem) item;
+                if (ContentFilter.isPoliticsBlocked(
+                        streamItem.getName(), streamItem.getUploaderName())) {
+                    continue;
+                }
+                out.add(streamItem);
             }
             return out;
         });

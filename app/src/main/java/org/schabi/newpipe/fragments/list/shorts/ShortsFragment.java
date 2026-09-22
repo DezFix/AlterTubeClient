@@ -40,6 +40,7 @@ import org.schabi.newpipe.local.subscription.SubscriptionManager;
 import org.schabi.newpipe.player.mediaitem.StreamInfoTag;
 import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.resolver.PlaybackResolver;
+import org.schabi.newpipe.util.ContentFilter;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.external_communication.ShareUtils;
 
@@ -355,8 +356,11 @@ public class ShortsFragment extends Fragment {
             } catch (final Exception ignored) {
                 // no history: generic feed below
             }
-            // 3) generic fallback (also covers fresh installs)
-            Collections.addAll(queries, GENERIC_QUERIES);
+            // 3) generic fallback (also covers fresh installs), shuffled per session
+            final List<String> generic =
+                    new ArrayList<>(java.util.Arrays.asList(GENERIC_QUERIES));
+            Collections.shuffle(generic);
+            queries.addAll(generic);
             return new ArrayList<>(queries);
         });
     }
@@ -399,6 +403,7 @@ public class ShortsFragment extends Fragment {
             loadNextQueryOrFail();
             return;
         }
+        Collections.shuffle(shorts); // fresh order every load, no repeats feeling
         adapter.setItems(shorts);
         feedModel.replaceItems(shorts);
         binding.shortsPager.setCurrentItem(0, false);
@@ -472,6 +477,7 @@ public class ShortsFragment extends Fragment {
                             final List<StreamInfoItem> more =
                                     filterShorts(searchInfo.getRelatedItems());
                             if (!more.isEmpty()) {
+                                Collections.shuffle(more);
                                 adapter.addItems(more);
                                 feedModel.appendItems(more);
                             }
@@ -520,10 +526,12 @@ public class ShortsFragment extends Fragment {
             final long duration = streamItem.getDuration();
             // Query results are shorts-biased; accept /shorts/ links,
             // items up to 3 minutes and items with unknown duration.
+            // Politics is always filtered out (ContentFilter).
             final boolean looksLikeShort = url.contains("/shorts/")
                     || duration <= 0
                     || duration <= MAX_SHORT_DURATION_SECONDS;
-            if (looksLikeShort) {
+            if (looksLikeShort && !ContentFilter.isPoliticsBlocked(
+                    streamItem.getName(), streamItem.getUploaderName())) {
                 shorts.add(streamItem);
             }
         }
