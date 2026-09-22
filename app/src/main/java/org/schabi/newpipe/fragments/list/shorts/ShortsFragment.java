@@ -8,6 +8,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
@@ -75,6 +76,7 @@ public class ShortsFragment extends Fragment {
     private int resolveToken = 0;
     private boolean muted = false;
     private boolean autoAdvance = false;
+    private ShortsFeedViewModel feedModel;
 
     // Endless-feed state: walk queries in order, paging inside each one.
     private int queryIndex = 0;
@@ -135,6 +137,7 @@ public class ShortsFragment extends Fragment {
         binding.shortsPager.registerOnPageChangeCallback(pageCallback);
         binding.shortsRetryButton.setOnClickListener(v -> loadFeed());
 
+        feedModel = new ViewModelProvider(requireActivity()).get(ShortsFeedViewModel.class);
         autoAdvance = androidx.preference.PreferenceManager
                 .getDefaultSharedPreferences(requireContext())
                 .getBoolean(PREF_AUTO_ADVANCE, false);
@@ -166,7 +169,21 @@ public class ShortsFragment extends Fragment {
             }
         });
 
-        loadFeed();
+        if (!feedModel.getItems().isEmpty()) {
+            // View recreated (rotation, tab rebuild): resume cached feed, no reload.
+            // Rebuild dedupe set so pagination continues without duplicates.
+            for (final StreamInfoItem cachedItem : feedModel.getItems()) {
+                if (cachedItem.getUrl() != null) {
+                    seenUrls.add(cachedItem.getUrl());
+                }
+            }
+            adapter.setItems(feedModel.getItems());
+            final int restore = Math.min(feedModel.getPosition(), adapter.getItemCount() - 1);
+            binding.shortsPager.setCurrentItem(restore, false);
+            playPosition(restore);
+        } else {
+            loadFeed();
+        }
     }
 
     private void toggleMute() {
@@ -300,6 +317,7 @@ public class ShortsFragment extends Fragment {
             return;
         }
         adapter.setItems(shorts);
+        feedModel.replaceItems(shorts);
         binding.shortsPager.setCurrentItem(0, false);
         playPosition(0);
     }
@@ -331,6 +349,7 @@ public class ShortsFragment extends Fragment {
                                         filterShorts(infoPage.getItems());
                                 if (!more.isEmpty()) {
                                     adapter.addItems(more);
+                                    feedModel.appendItems(more);
                                 } else if (nextPage == null) {
                                     advanceQuery();
                                 }
@@ -371,6 +390,7 @@ public class ShortsFragment extends Fragment {
                                     filterShorts(searchInfo.getRelatedItems());
                             if (!more.isEmpty()) {
                                 adapter.addItems(more);
+                                feedModel.appendItems(more);
                             }
                         },
                         throwable -> loadingMore = false));
@@ -429,6 +449,9 @@ public class ShortsFragment extends Fragment {
 
     private void playPosition(final int position) {
         currentPosition = position;
+        if (feedModel != null) {
+            feedModel.setPosition(position);
+        }
         if (player == null || adapter == null
                 || position < 0 || position >= adapter.getItemCount()) {
             return;
