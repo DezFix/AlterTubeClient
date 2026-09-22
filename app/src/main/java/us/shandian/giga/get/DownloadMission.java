@@ -21,8 +21,6 @@ import java.nio.channels.ClosedByInterruptException;
 import java.util.Objects;
 
 import static org.schabi.newpipe.BuildConfig.DEBUG;
-import static us.shandian.giga.postprocessing.Postprocessing.NICONICO_MUXER;
-import static us.shandian.giga.util.Utility.setRequestPropertyIfDownloadingBilibili;
 
 public class DownloadMission extends Mission {
     private static final long serialVersionUID = 6L;// last bump: 07 october 2019
@@ -232,7 +230,6 @@ public class DownloadMission extends Mission {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setInstanceFollowRedirects(true);
         conn.setRequestProperty("User-Agent", DownloaderImpl.USER_AGENT);
-        setRequestPropertyIfDownloadingBilibili(url, conn);
         if (cookie != null) conn.setRequestProperty("Cookie", cookie);
 
         conn.setRequestProperty("Accept", "*/*");
@@ -666,10 +663,6 @@ public class DownloadMission extends Mission {
     public long getLength() {
         long calculated;
         if (psState == 1 || psState == 3) {
-            if(psAlgorithm != null && psAlgorithm.name == NICONICO_MUXER) {
-                long result = (long) Math.ceil(Long.parseLong(URLDecoder.decode(urls[0].split("&length=")[1]))/6.0);
-                return result * (kind == 'v'? 2 :1);
-            }
             return length;
         }
 

@@ -1020,7 +1020,6 @@ public final class Player implements
         if(enqueueTimer != null){
             enqueueTimer.cancel(true);
         }
-        dataSource.disconnectWebSocketClients();
     }
 
     public void destroy() {
@@ -5864,6 +5863,5 @@ case ERROR_CODE_DECODER_INIT_FAILED: {
         pauseBCPlayer();
         currentState = STATE_PAUSED;
         notifyPlaybackUpdateToListeners();
-        dataSource.disconnectWebSocketClients();
     }
 }

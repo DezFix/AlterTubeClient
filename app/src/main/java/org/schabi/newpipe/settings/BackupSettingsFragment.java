@@ -100,7 +100,7 @@ public class BackupSettingsFragment extends BasePreferenceFragment {
             NoFileManagerSafeGuard.launchSafe(
                     requestExportPathLauncher,
                     StoredFileHelper.getNewPicker(requireContext(),
-                            "PipePipeData-" + exportDateFormat.format(new Date()) + ".zip",
+                            "AlterTubeData-" + exportDateFormat.format(new Date()) + ".zip",
                             ZIP_MIME_TYPE, getImportExportDataUri()),
                     TAG,
                     getContext()
@@ -123,15 +123,6 @@ public class BackupSettingsFragment extends BasePreferenceFragment {
                     R.id.settings_fragment_holder, ServiceList.YouTube.getServiceId());
             return true;
         });
-
-        final Preference importSoundCloudSubscriptionsPreference =
-                requirePreference(R.string.import_soundcloud_subscriptions_key);
-        importSoundCloudSubscriptionsPreference.setOnPreferenceClickListener(
-                (final Preference p) -> {
-                    NavigationHelper.openSubscriptionsImportFragment(getParentFragmentManager(),
-                            R.id.settings_fragment_holder, ServiceList.SoundCloud.getServiceId());
-                    return true;
-                });
 
         final Preference exportSubscriptionsPreference =
                 requirePreference(R.string.export_subscriptions_key);

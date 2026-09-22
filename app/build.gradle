@@ -172,6 +172,7 @@ ext {
 
     leakCanaryVersion = '2.14'
     stethoVersion = '1.6.0'
+    sentryVersion = '8.16.0'
 }
 
 afterEvaluate {
@@ -255,8 +256,10 @@ dependencies {
     // Image Viewer: PhotoView
     implementation "com.github.chrisbanes:PhotoView:2.3.0"
 
-    // Crash reporting
+    // Crash reporting (in-app screen)
     implementation "ch.acra:acra-core:5.13.1"
+    // Crash reporting (auto-send to Bugsink, Sentry-compatible)
+    implementation "io.sentry:sentry-android:${sentryVersion}"
 
     // Properly restarting
     implementation 'com.jakewharton:process-phoenix:3.0.0'

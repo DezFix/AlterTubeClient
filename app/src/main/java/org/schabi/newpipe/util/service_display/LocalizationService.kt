@@ -7,11 +7,7 @@ sealed class LocalizationService {
 
     companion object {
         @JvmStatic
-        fun of(serviceId: Int): LocalizationService? =
-            when (serviceId) {
-                ServiceList.BiliBili.serviceId -> BiliBiliLocalizationService
-                else -> null
-            }
+        fun of(serviceId: Int): LocalizationService? = null
     }
 
     @StringRes

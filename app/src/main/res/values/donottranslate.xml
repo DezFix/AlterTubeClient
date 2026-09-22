@@ -18,7 +18,7 @@
     <string name="sha1">SHA-1</string>
     <string name="recaptcha">reCAPTCHA</string>
     <string name="github_url">https://github.com/DezFix/AlterTube/issues</string>
-    <string name="donation_url">https://github.com/DezFix/AlterTube</string>
+    <string name="donation_url">https://ko-fi.com/dezfix</string>
     <string name="website_url">https://github.com/DezFix/AlterTube</string>
     <string name="privacy_policy_url">https://github.com/DezFix/AlterTube</string>
     <string name="service_kiosk_string">%1$s/%2$s</string>

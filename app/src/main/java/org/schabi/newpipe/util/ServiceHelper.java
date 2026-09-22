@@ -16,7 +16,6 @@ import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;
 import org.schabi.newpipe.extractor.StreamingService;
 import org.schabi.newpipe.extractor.exceptions.ExtractionException;
-import org.schabi.newpipe.extractor.services.peertube.PeertubeInstance;
 import org.schabi.newpipe.extractor.sponsorblock.SponsorBlockApiSettings;
 import org.schabi.newpipe.extractor.InfoItemsCollector.FilterConfig;
 
@@ -24,9 +23,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-
-import static org.schabi.newpipe.extractor.ServiceList.NicoNico;
-import static org.schabi.newpipe.extractor.ServiceList.SoundCloud;
 public final class ServiceHelper {
     private static final StreamingService DEFAULT_FALLBACK_SERVICE = ServiceList.YouTube;
 
@@ -34,24 +30,11 @@ public final class ServiceHelper {
 
     @DrawableRes
     public static int getIcon(final int serviceId) {
-        switch (serviceId) {
-            case 0:
-                return R.drawable.ic_youtube;
-            case 1:
-                return R.drawable.place_holder_cloud;
-            case 2:
-                return R.drawable.place_holder_gadse;
-            case 3:
-                return R.drawable.place_holder_peertube;
-            case 4:
-                return R.drawable.place_holder_bandcamp;
-            case 5:
-                return R.drawable.ic_bilibili;
-            case 6:
-                return R.drawable.place_holder_niconico;
-            default:
-                return R.drawable.place_holder_circle;
+        // AlterTube is YouTube-only.
+        if (serviceId == ServiceList.YouTube.getServiceId()) {
+            return R.drawable.ic_youtube;
         }
+        return R.drawable.place_holder_circle;
     }
 
     public static String getTranslatedFilterString(final String filter, final Context c) {
@@ -176,14 +159,10 @@ public final class ServiceHelper {
      */
     @StringRes
     public static int getImportInstructions(final int serviceId) {
-        switch (serviceId) {
-            case 0:
-                return R.string.import_youtube_instructions;
-            case 1:
-                return R.string.import_soundcloud_instructions;
-            default:
-                return -1;
+        if (serviceId == ServiceList.YouTube.getServiceId()) {
+            return R.string.import_youtube_instructions;
         }
+        return -1;
     }
 
     /**
@@ -195,12 +174,7 @@ public final class ServiceHelper {
      */
     @StringRes
     public static int getImportInstructionsHint(final int serviceId) {
-        switch (serviceId) {
-            case 1:
-                return R.string.import_soundcloud_instructions_hint;
-            default:
-                return -1;
-        }
+        return -1;
     }
 
     public static int getSelectedServiceId(final Context context) {
@@ -246,73 +220,20 @@ public final class ServiceHelper {
     }
 
     public static long getCacheExpirationMillis(final int serviceId) {
-        if (serviceId == SoundCloud.getServiceId()) {
-            return TimeUnit.MILLISECONDS.convert(5, TimeUnit.MINUTES);
-        } else if (serviceId == NicoNico.getServiceId()) {
-            return TimeUnit.MILLISECONDS.convert(2, TimeUnit.MINUTES);
-        } else {
-            return TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS);
-        }
+        return TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS);
     }
 
     public static boolean isBeta(final StreamingService s) {
-        switch (s.getServiceInfo().getName()) {
-            case "YouTube":
-            case "BiliBili":
-            case "NicoNico":
-                return false;
-            default:
-                return true;
-        }
+        return false;
     }
 
     public static void initService(final Context context, final int serviceId) {
-        if (serviceId == ServiceList.PeerTube.getServiceId()) {
-            final SharedPreferences sharedPreferences = PreferenceManager
-                    .getDefaultSharedPreferences(context);
-            final String json = sharedPreferences.getString(context.getString(
-                    R.string.peertube_selected_instance_key), null);
-            if (null == json) {
-                return;
-            }
-
-            final JsonObject jsonObject;
-            try {
-                jsonObject = JsonParser.object().from(json);
-            } catch (final JsonParserException e) {
-                return;
-            }
-            final String name = jsonObject.getString("name");
-            final String url = jsonObject.getString("url");
-            final PeertubeInstance instance = new PeertubeInstance(url, name);
-            ServiceList.PeerTube.setInstance(instance);
-        } else if (serviceId == ServiceList.NicoNico.getServiceId()) {
-            final SharedPreferences sharedPreferences = PreferenceManager
-                    .getDefaultSharedPreferences(context);
-            final String tokens = sharedPreferences.getString(context.getString(
-                    R.string.niconico_cookies_key), null);
-            ServiceList.NicoNico.setTokens(tokens);
-            if(sharedPreferences.getBoolean(context.getString(R.string.override_cookies_niconico_key), false)) {
-                ServiceList.NicoNico.setTokens(sharedPreferences.getString(context.getString(R.string.override_cookies_niconico_value_key), null));
-            }
-            final Set<String> cookieFunctions = sharedPreferences.getStringSet(context.getString(
-                    R.string.cookie_functions_niconico_key), null);
-            ServiceList.NicoNico.setCookieFunctions(cookieFunctions);
-        } else if (serviceId == ServiceList.BiliBili.getServiceId()) {
-            final SharedPreferences sharedPreferences = PreferenceManager
-                    .getDefaultSharedPreferences(context);
-            final String tokens = sharedPreferences.getString(context.getString(
-                    R.string.bilibili_cookies_key), null);
-            ServiceList.BiliBili.setTokens(tokens);
-            if(sharedPreferences.getBoolean(context.getString(R.string.override_cookies_bilibili_key), false)) {
-                ServiceList.BiliBili.setTokens(sharedPreferences.getString(context.getString(R.string.override_cookies_bilibili_value_key), null));
-            }
-            final Set<String> cookieFunctions = sharedPreferences.getStringSet(context.getString(
-                    R.string.cookie_functions_bilibili_key), null);
-            ServiceList.BiliBili.setCookieFunctions(cookieFunctions);
-        } else if (serviceId == ServiceList.YouTube.getServiceId()) {
-            final SharedPreferences sharedPreferences = PreferenceManager
-                    .getDefaultSharedPreferences(context);
+        // AlterTube is YouTube-only; other services were removed.
+        if (serviceId != ServiceList.YouTube.getServiceId()) {
+            return;
+        }
+        final SharedPreferences sharedPreferences = PreferenceManager
+                .getDefaultSharedPreferences(context);
             final String tokens = sharedPreferences.getString(context.getString(
                     R.string.youtube_cookies_key), null);
             final String audioLanguage = sharedPreferences.getString(context.getString(
@@ -331,7 +252,6 @@ public final class ServiceHelper {
 //                ServiceList.YouTube.setTokens(sharedPreferences.getString(context.getString(R.string.override_cookies_youtube_value_key), null));
 //            }
 //            CookieUtils.exportCookiesToNetscapeYouTube(context, ServiceList.YouTube.getTokens());
-        }
     }
 
     public static void initServices(final Context context) {
