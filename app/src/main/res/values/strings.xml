@@ -329,11 +329,11 @@
 <string name="charset_most_special_characters">Most special characters</string>
 <string name="toast_no_player">No app installed to play this file</string>
 <!-- About -->
-<string name="title_activity_about_new">About PipePipe</string>
+    <string name="title_activity_about_new">About AlterTube</string>
 <string name="title_licenses">Third-party Licenses</string>
 <string name="copyright">© %1$s by %2$s under %3$s</string>
 <string name="tab_about">About</string>
-<string name="app_description_new">A FLOSS Android app to let you browse YouTube, NicoNico and BiliBili freely </string>
+<string name="app_description_new">AlterTube — a lightweight YouTube client: TikTok-style Shorts feed, music mode, no ads.</string>
 <string name="contribution_title">Contribute</string>
 <string name="contribution_encouragement">Whether you have ideas of; translation, design changes, code cleaning, or real heavy code changes—help is always welcome. The more is done the better it gets!</string>
 <string name="donation_title">Donate</string>
@@ -932,7 +932,7 @@
 <string name="speeding_playback_title">Long-press to speeding the playback</string>
 <string name="view_on_github">View on GitHub</string>
 <string name="donation_dialog_title">Support the Project</string>
-<string name="donation_dialog_message">Thank you for using PipePipe! If you find it useful, please consider becoming a supporter on Ko-Fi. Your support is important to me and helps me add more exciting new features. Every bit counts! 😇</string>
+<string name="donation_dialog_message">Thank you for using AlterTube! If you find it useful, please consider becoming a supporter on Ko-Fi. Your support helps DezFix add more exciting new features. Every bit counts! 😇</string>
 <string name="fullscreen_gesture_control_summary">Use gestures to enter / exit fullscreen. Disables playback speed gesture control</string>
 <string name="fullscreen_gesture_control_title">Fullscreen gesture control</string>
 <string name="require_audio_focus_summary">Make sure only PipePipe is playing audio</string>
