@@ -2,14 +2,18 @@ package org.schabi.newpipe;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.preference.PreferenceManager;
 
 import org.schabi.newpipe.databinding.ActivityWelcomeBinding;
 import org.schabi.newpipe.util.Localization;
-import org.schabi.newpipe.util.PermissionChecker;
 import org.schabi.newpipe.util.ThemeHelper;
 
 /**
@@ -17,6 +21,10 @@ import org.schabi.newpipe.util.ThemeHelper;
  * (update checker + theme) instead of a stack of popups.
  */
 public class WelcomeActivity extends AppCompatActivity {
+    private final ActivityResultLauncher<String> notificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(),
+                    granted -> proceedToMain());
+
     @Override
     protected void onCreate(final Bundle savedInstanceState) {
         Localization.assureCorrectAppLanguage(this);
@@ -49,9 +57,21 @@ public class WelcomeActivity extends AppCompatActivity {
             editor.putInt("isFirstRun", 1);
             editor.apply();
 
-            PermissionChecker.checkNotificationPermission(this);
-            startActivity(new Intent(this, MainActivity.class));
-            finish();
+            // System notification permission (Android 13+), then go to main screen.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                    && ContextCompat.checkSelfPermission(this,
+                    android.Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(
+                        android.Manifest.permission.POST_NOTIFICATIONS);
+            } else {
+                proceedToMain();
+            }
         });
+    }
+
+    private void proceedToMain() {
+        startActivity(new Intent(this, MainActivity.class));
+        finish();
     }
 }
