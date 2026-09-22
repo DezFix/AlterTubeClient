@@ -12,7 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.exoplayer2.ExoPlayer;
-import com.google.android.exoplayer2.MediaSource;
+import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 

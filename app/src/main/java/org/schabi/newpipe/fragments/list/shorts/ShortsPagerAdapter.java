@@ -67,8 +67,9 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
         final StreamInfoItem item = items.get(position);
         holder.title.setText(item.getName());
         holder.channel.setText(item.getUploaderName());
-        if (!item.getThumbnails().isEmpty()) {
-            PicassoHelper.loadThumbnail(item.getThumbnails().get(0)).into(holder.thumbnail);
+        final String thumbnailUrl = item.getThumbnailUrl();
+        if (thumbnailUrl != null && !thumbnailUrl.isEmpty()) {
+            PicassoHelper.loadThumbnail(thumbnailUrl).into(holder.thumbnail);
         } else {
             holder.thumbnail.setImageDrawable(null);
         }
