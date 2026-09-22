@@ -20,6 +20,9 @@ import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import org.schabi.newpipe.DownloaderImpl;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.FragmentShortsBinding;
+import org.schabi.newpipe.database.history.model.StreamHistoryEntry;
+import org.schabi.newpipe.database.stream.model.StreamEntity;
+import org.schabi.newpipe.database.subscription.SubscriptionEntity;
 import org.schabi.newpipe.extractor.InfoItem;
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.Page;
@@ -32,6 +35,8 @@ import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 import org.schabi.newpipe.fragments.list.shorts.ShortsPagerAdapter.ShortsPageHolder;
+import org.schabi.newpipe.local.history.HistoryRecordManager;
+import org.schabi.newpipe.local.subscription.SubscriptionManager;
 import org.schabi.newpipe.player.mediaitem.StreamInfoTag;
 import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.resolver.PlaybackResolver;
@@ -57,7 +62,10 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
  */
 public class ShortsFragment extends Fragment {
 
-    private static final String[] SHORTS_QUERIES = {"#shorts", "#shorts video", "shorts"};
+    private static final String[] GENERIC_QUERIES = {"#shorts", "#shorts video", "shorts"};
+    /** Max personalized queries (subs + history) prepended before generic ones. */
+    private static final int MAX_SUB_QUERIES = 4;
+    private static final int MAX_HISTORY_QUERIES = 3;
     /** YouTube allows shorts up to 3 minutes; unknown duration (-1) is also accepted. */
     private static final long MAX_SHORT_DURATION_SECONDS = 180;
     private static final String PREF_AUTO_ADVANCE = "shorts_auto_advance";
@@ -83,6 +91,7 @@ public class ShortsFragment extends Fragment {
     private Page nextPage;
     private boolean loadingMore = false;
     private final java.util.Set<String> seenUrls = new java.util.HashSet<>();
+    private List<String> feedQueries = new ArrayList<>();
     private final ViewPager2.OnPageChangeCallback pageCallback =
             new ViewPager2.OnPageChangeCallback() {
                 @Override
@@ -259,23 +268,97 @@ public class ShortsFragment extends Fragment {
         infoCache.clear();
         currentPosition = 0;
 
-        final Single<SearchInfo> search = buildFirstPageSingle();
-        if (search == null) {
-            binding.shortsLoading.setVisibility(View.GONE);
-            binding.shortsErrorBox.setVisibility(View.VISIBLE);
-            return;
-        }
-
-        disposables.add(search
+        // Personalized queries first (subs + history), generic fallback after.
+        disposables.add(buildTargetedQueries()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(this::onFeedLoaded, throwable -> {
+                .subscribe(queries -> {
+                    if (binding == null) {
+                        return;
+                    }
+                    feedQueries = queries;
+                    final Single<SearchInfo> search = buildFirstPageSingle();
+                    if (search == null) {
+                        binding.shortsLoading.setVisibility(View.GONE);
+                        binding.shortsErrorBox.setVisibility(View.VISIBLE);
+                        return;
+                    }
+                    disposables.add(search
+                            .subscribeOn(Schedulers.io())
+                            .observeOn(AndroidSchedulers.mainThread())
+                            .subscribe(this::onFeedLoaded, throwable -> {
+                                if (binding == null) {
+                                    return;
+                                }
+                                binding.shortsLoading.setVisibility(View.GONE);
+                                binding.shortsErrorBox.setVisibility(View.VISIBLE);
+                            }));
+                }, throwable -> {
                     if (binding == null) {
                         return;
                     }
                     binding.shortsLoading.setVisibility(View.GONE);
                     binding.shortsErrorBox.setVisibility(View.VISIBLE);
                 }));
+    }
+
+    /**
+     * Targeted feed queries: subscribed channels and recently watched uploaders
+     * first (e.g. a gamer gets gaming shorts), generic queries as fallback.
+     */
+    private Single<List<String>> buildTargetedQueries() {
+        return Single.fromCallable(() -> {
+            final java.util.LinkedHashSet<String> queries = new java.util.LinkedHashSet<>();
+            final android.content.Context ctx =
+                    requireContext().getApplicationContext();
+            // 1) subscribed YouTube channels
+            try {
+                final List<SubscriptionEntity> subs = new SubscriptionManager(ctx)
+                        .subscriptionTable().getAll()
+                        .blockingFirst(new ArrayList<>());
+                int taken = 0;
+                for (final SubscriptionEntity sub : subs) {
+                    if (taken >= MAX_SUB_QUERIES) {
+                        break;
+                    }
+                    if (sub.getServiceId() != ServiceList.YouTube.getServiceId()) {
+                        continue;
+                    }
+                    final String name = sub.getName() == null ? "" : sub.getName().trim();
+                    if (!name.isEmpty()) {
+                        queries.add(name + " shorts");
+                        taken++;
+                    }
+                }
+            } catch (final Exception ignored) {
+                // no subs or db unavailable: generic feed below
+            }
+            // 2) uploaders from recent watch history (newest first)
+            try {
+                final List<StreamHistoryEntry> history = new HistoryRecordManager(ctx)
+                        .getStreamHistorySortedById()
+                        .blockingFirst(new ArrayList<>());
+                int taken = 0;
+                int scanned = 0;
+                for (int i = history.size() - 1;
+                        i >= 0 && scanned < 15 && taken < MAX_HISTORY_QUERIES; i--, scanned++) {
+                    final StreamEntity stream = history.get(i).getStreamEntity();
+                    if (stream.getServiceId() != ServiceList.YouTube.getServiceId()) {
+                        continue;
+                    }
+                    final String uploader =
+                            stream.getUploader() == null ? "" : stream.getUploader().trim();
+                    if (!uploader.isEmpty() && queries.add(uploader + " shorts")) {
+                        taken++;
+                    }
+                }
+            } catch (final Exception ignored) {
+                // no history: generic feed below
+            }
+            // 3) generic fallback (also covers fresh installs)
+            Collections.addAll(queries, GENERIC_QUERIES);
+            return new ArrayList<>(queries);
+        });
     }
 
     @Nullable
@@ -285,7 +368,7 @@ public class ShortsFragment extends Fragment {
         // (outside Rx), so guard the whole call against synchronous throws.
         try {
             return ExtractorHelper.searchFor(ServiceList.YouTube.getServiceId(),
-                    SHORTS_QUERIES[queryIndex], allFilter(), Collections.emptyList());
+                    feedQueries.get(queryIndex), allFilter(), Collections.emptyList());
         } catch (final Exception e) {
             return null;
         }
@@ -333,7 +416,7 @@ public class ShortsFragment extends Fragment {
             final int qIndex = queryIndex;
             disposables.add(ExtractorHelper
                     .getMoreSearchItems(ServiceList.YouTube.getServiceId(),
-                            SHORTS_QUERIES[qIndex], allFilter(),
+                            feedQueries.get(qIndex), allFilter(),
                             Collections.emptyList(), page)
                     .subscribeOn(Schedulers.io())
                     .observeOn(AndroidSchedulers.mainThread())
@@ -364,7 +447,7 @@ public class ShortsFragment extends Fragment {
         if (loadingMore) {
             return;
         }
-        if (queryIndex + 1 >= SHORTS_QUERIES.length) {
+        if (queryIndex + 1 >= feedQueries.size()) {
             return; // out of queries: feed simply ends
         }
         loadingMore = true;
@@ -397,7 +480,7 @@ public class ShortsFragment extends Fragment {
     }
 
     private void loadNextQueryOrFail() {
-        if (queryIndex + 1 >= SHORTS_QUERIES.length) {
+        if (queryIndex + 1 >= feedQueries.size()) {
             binding.shortsErrorBox.setVisibility(View.VISIBLE);
             return;
         }
