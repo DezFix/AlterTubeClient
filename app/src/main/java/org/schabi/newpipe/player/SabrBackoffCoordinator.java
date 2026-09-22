@@ -114,7 +114,7 @@ public final class SabrBackoffCoordinator {
         final int seconds = remainingSeconds(remainingMs);
         final NotificationCompat.Builder builder = new NotificationCompat.Builder(appContext,
                 appContext.getString(R.string.sabr_backoff_notification_channel_id))
-                .setSmallIcon(R.drawable.ic_pipepipe)
+                .setSmallIcon(R.drawable.ic_altertube)
                 .setContentTitle(appContext.getString(R.string.sabr_backoff_notification_title))
                 .setContentText(appContext.getString(
                         R.string.sabr_backoff_notification_content, seconds))

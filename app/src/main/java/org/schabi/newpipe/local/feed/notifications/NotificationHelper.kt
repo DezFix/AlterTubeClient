@@ -45,7 +45,7 @@ class NotificationHelper(val context: Context) {
             .setNumber(newStreams.size)
             .setBadgeIconType(NotificationCompat.BADGE_ICON_LARGE)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setSmallIcon(R.drawable.ic_pipepipe)
+            .setSmallIcon(R.drawable.ic_altertube)
             .setColor(ContextCompat.getColor(context, R.color.ic_launcher_background))
             .setColorized(true)
             .setAutoCancel(true)

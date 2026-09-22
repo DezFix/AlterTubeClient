@@ -7,7 +7,7 @@ import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.info_list.CommonItem
 import org.schabi.newpipe.info_list.InfoItemBuilder
 import org.schabi.newpipe.info_list.ItemViewMode
-import org.schabi.newpipe.info_list.PipePipeComposeTheme
+import org.schabi.newpipe.info_list.AlterTubeComposeTheme
 import org.schabi.newpipe.info_list.buildInfoItemState
 import org.schabi.newpipe.local.history.HistoryRecordManager
 import org.schabi.newpipe.util.ThemeHelper
@@ -32,7 +32,7 @@ class ComposeInfoItemHolder(
     override fun updateFromItem(infoItem: InfoItem, historyRecordManager: HistoryRecordManager) {
         val state = buildInfoItemState(composeView.context, infoItem, historyRecordManager) ?: return
         composeView.setContent {
-            PipePipeComposeTheme(composeView.context) {
+            AlterTubeComposeTheme(composeView.context) {
                 CommonItem(
                     state = state,
                     isGridLayout = ThemeHelper.isGrid(itemViewMode),

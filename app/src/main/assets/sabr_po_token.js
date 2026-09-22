@@ -1,7 +1,7 @@
-/* global PipePipeWebViewBridge */
+/* global AlterTubeWebViewBridge */
 
 function pipepipeBridge() {
-  return window["PipePipeWebViewBridge"];
+  return window["AlterTubeWebViewBridge"];
 }
 
 function loadBotGuard(root, challengeData, onReady, onError) {
@@ -173,7 +173,7 @@ function obtainPoToken(mintCallback, identifier) {
   return result;
 }
 
-function pipepipeSabrRunBotguard(sessionId, eventId, challengeData) {
+function altertubeSabrRunBotguard(sessionId, eventId, challengeData) {
   var bridge = pipepipeBridge();
   try {
     window.yt = window.yt || {};
@@ -206,7 +206,7 @@ function pipepipeSabrRunBotguard(sessionId, eventId, challengeData) {
   }
 }
 
-function pipepipeSabrCreateMinter(sessionId, integrityToken) {
+function altertubeSabrCreateMinter(sessionId, integrityToken) {
   var bridge = pipepipeBridge();
   try {
     var sessions = window.__sabrLocalDomSessions || {};
@@ -228,7 +228,7 @@ function pipepipeSabrCreateMinter(sessionId, integrityToken) {
   }
 }
 
-function pipepipeSabrObtainPoToken(sessionId, identifier, identifierU8) {
+function altertubeSabrObtainPoToken(sessionId, identifier, identifierU8) {
   var bridge = pipepipeBridge();
   try {
     var sessions = window.__sabrLocalDomSessions || {};
@@ -258,7 +258,7 @@ function pipepipeSabrObtainPoToken(sessionId, identifier, identifierU8) {
   }
 }
 
-function pipepipeSabrDeleteSession(sessionId) {
+function altertubeSabrDeleteSession(sessionId) {
   if (window.__sabrLocalDomSessions) {
     delete window.__sabrLocalDomSessions[sessionId];
   }

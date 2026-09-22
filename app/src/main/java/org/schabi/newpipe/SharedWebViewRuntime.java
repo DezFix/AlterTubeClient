@@ -56,7 +56,7 @@ public final class SharedWebViewRuntime {
         void onObtainPoTokenError(@NonNull String identifier, @NonNull String error);
     }
 
-    public static final String BRIDGE_NAME = "PipePipeWebViewBridge";
+    public static final String BRIDGE_NAME = "AlterTubeWebViewBridge";
 
     private static final String TAG = "SharedWebViewRuntime";
     private static final long DEFAULT_TIMEOUT_MS = 30_000L;
@@ -347,7 +347,7 @@ public final class SharedWebViewRuntime {
     @NonNull
     private static String runtimeDocument(final long attemptId) {
         return "<!doctype html><html><head><script>"
-                + "PipePipeWebViewBridge.onRuntimeDocumentReady('" + attemptId + "');"
+                + "AlterTubeWebViewBridge.onRuntimeDocumentReady('" + attemptId + "');"
                 + "</script><title></title></head><body></body></html>";
     }
 

@@ -79,7 +79,7 @@ class NotificationWorker(
             applicationContext.getString(R.string.notification_channel_id)
         ).setOngoing(true)
             .setProgress(-1, -1, true)
-            .setSmallIcon(R.drawable.ic_pipepipe)
+            .setSmallIcon(R.drawable.ic_altertube)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentTitle(applicationContext.getString(R.string.feed_notification_loading))

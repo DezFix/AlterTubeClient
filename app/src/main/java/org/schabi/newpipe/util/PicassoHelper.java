@@ -155,7 +155,7 @@ public final class PicassoHelper {
     }
 
     public static RequestCreator loadSeekbarThumbnailPreview(final String url) {
-        return picassoInstance.load(url); ///should not transform, see https://github.com/InfinityLoop1308/PipePipe/issues/215
+        return picassoInstance.load(url); // should not transform (seekbar preview must stay raw)
     }
 
     public static RequestCreator loadScaledDownThumbnail(final Context context, final String url){ // reserve for compatibility
@@ -177,7 +177,7 @@ public final class PicassoHelper {
 
     public static void loadNotificationIcon(final String url,
                                             final Consumer<Bitmap> bitmapConsumer) {
-        loadImageDefault(url, R.drawable.ic_pipepipe)
+        loadImageDefault(url, R.drawable.ic_altertube)
                 .into(new Target() {
                     @Override
                     public void onBitmapLoaded(final Bitmap bitmap, final Picasso.LoadedFrom from) {

@@ -192,7 +192,8 @@ public class MainActivity extends AppCompatActivity {
         long lastShowDonationTime = prefs.getLong("last_show_donation_time", 0);
         long currentTime = System.currentTimeMillis();
 
-        if (currentVersionCode > storedVersionCode + 90) {
+        final boolean isFreshInstall = storedVersionCode == 0;
+        if (!isFreshInstall && currentVersionCode > storedVersionCode + 90) {
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle(R.string.fragment_feed_title);
             builder.setMessage(R.string.update_log);
@@ -222,8 +223,9 @@ public class MainActivity extends AppCompatActivity {
             });
 
             dialog1.show();
-            prefs.edit().putInt("version_code", currentVersionCode).apply();
         }
+        // On fresh install just remember the version: no changelog or donation popups in face.
+        prefs.edit().putInt("version_code", currentVersionCode).apply();
         // TODO(AlterTube): own announcements (e.g. via GitHub releases) — upstream wiki removed.
 
 

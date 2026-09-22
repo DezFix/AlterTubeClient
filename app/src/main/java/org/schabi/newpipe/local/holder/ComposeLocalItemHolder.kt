@@ -9,7 +9,7 @@ import org.schabi.newpipe.database.playlist.PlaylistStreamEntry
 import org.schabi.newpipe.database.playlist.model.PlaylistRemoteEntity
 import org.schabi.newpipe.database.stream.StreamStatisticsEntry
 import org.schabi.newpipe.info_list.CommonItem
-import org.schabi.newpipe.info_list.PipePipeComposeTheme
+import org.schabi.newpipe.info_list.AlterTubeComposeTheme
 import org.schabi.newpipe.info_list.buildLocalItemState
 import org.schabi.newpipe.info_list.ItemViewMode
 import org.schabi.newpipe.local.LocalItemBuilder
@@ -42,7 +42,7 @@ class ComposeLocalItemHolder(
     ) {
         val state = buildLocalItemState(composeView.context, item, dateTimeFormatter) ?: return
         composeView.setContent {
-            PipePipeComposeTheme(composeView.context) {
+            AlterTubeComposeTheme(composeView.context) {
                 CommonItem(
                     state = state,
                     isGridLayout = ThemeHelper.isGrid(itemViewMode),

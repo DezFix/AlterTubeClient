@@ -14,7 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-public final class PipePipeMigrations {
+public final class AlterTubeMigrations {
     public static final Migration MIGRATION_0_1 = new Migration(0, 1) {
         @Override
         protected void migrate(final Context context, final SharedPreferences preferences) {
@@ -71,7 +71,7 @@ public final class PipePipeMigrations {
 
     public static void initMigrations(final Context context, final boolean isFirstRun) {
         final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-        final String versionKey = context.getString(R.string.last_used_pipepipe_preferences_version);
+        final String versionKey = context.getString(R.string.last_used_altertube_preferences_version);
         final int lastVersion = preferences.getInt(versionKey, 0);
 
         if (isFirstRun) {
@@ -286,7 +286,7 @@ public final class PipePipeMigrations {
                 context.getString(R.string.sponsor_block_skip_mode_highlight_value));
     }
 
-    private PipePipeMigrations() { }
+    private AlterTubeMigrations() { }
 
     abstract static class Migration {
         public final int oldVersion;

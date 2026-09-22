@@ -62,7 +62,7 @@ public final class NewPipeSettings {
 
         // first run migrations, then setDefaultValues, since the latter requires the correct types
         SettingMigrations.initMigrations(context, isFirstRun);
-        PipePipeMigrations.initMigrations(context, isFirstRun);
+        AlterTubeMigrations.initMigrations(context, isFirstRun);
 
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         final String rotationFullscreenKey = context.getString(
@@ -119,7 +119,7 @@ public final class NewPipeSettings {
     }
 
     private static String getNewPipeChildFolderPathForDir(final File dir) {
-        return new File(dir, "PipePipe").toURI().toString();
+        return new File(dir, "AlterTube").toURI().toString();
     }
 
     public static boolean useStorageAccessFramework(final Context context) {

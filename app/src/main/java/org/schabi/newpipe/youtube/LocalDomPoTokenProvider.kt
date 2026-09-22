@@ -227,7 +227,7 @@ private class PersistentMintSession private constructor(
             tokenWaiters[identifier] = waiter
         }
         val posted = runtime.evaluateJavascript(
-            "pipepipeSabrObtainPoToken(" + jsonString(sessionId) + ", " +
+            "altertubeSabrObtainPoToken(" + jsonString(sessionId) + ", " +
                 jsonString(identifier) + ", " + stringToSabrU8(identifier) + ");",
             null,
         ) { error -> onTokenError(identifier, error) }
@@ -276,7 +276,7 @@ private class PersistentMintSession private constructor(
             tokenWaiters.clear()
         }
         runtime.evaluateJavascript(
-            "pipepipeSabrDeleteSession(" + jsonString(sessionId) + ");",
+            "altertubeSabrDeleteSession(" + jsonString(sessionId) + ");",
             null,
             null,
         )
@@ -396,7 +396,7 @@ private class PersistentMintSession private constructor(
         interpreterJavascript: String,
     ) {
         runtime.evaluateJavascript(
-            "pipepipeSabrRunBotguard(" + jsonString(sessionId) + ", " +
+            "altertubeSabrRunBotguard(" + jsonString(sessionId) + ", " +
                 jsonString(bootstrap.eventId) + ", " +
                 buildSabrAttChallengeData(challenge, interpreterJavascript) + ");",
             null,
@@ -414,7 +414,7 @@ private class PersistentMintSession private constructor(
                     expiresAtMs = System.currentTimeMillis() +
                         TimeUnit.SECONDS.toMillis(integrityTokenData.second)
                     runtime.evaluateJavascript(
-                        "pipepipeSabrCreateMinter(" + jsonString(sessionId) + ", " +
+                        "altertubeSabrCreateMinter(" + jsonString(sessionId) + ", " +
                             integrityToken + ");",
                         null,
                     ) { error -> failInitialization(error) }

@@ -1712,7 +1712,7 @@
     </string-array>
 
     <string name="show_channel_tabs_podcasts">show_channel_tabs_podcasts</string>
-    <string name="last_used_pipepipe_preferences_version">last_used_pipepipe_preferences_version</string>
+    <string name="last_used_altertube_preferences_version">last_used_altertube_preferences_version</string>
     <string name="video_tabs_key">video_tabs_key</string>
     <string-array name="video_tabs_value_list">
         <item>comments</item>

@@ -80,7 +80,7 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 @Composable
-fun PipePipeComposeTheme(
+fun AlterTubeComposeTheme(
     context: Context,
     content: @Composable () -> Unit
 ) {
