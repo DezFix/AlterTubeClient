@@ -72,6 +72,8 @@
     <string name="video">Видео</string>
     <string name="audio">Аудио</string>
     <string name="retry">Повтор</string>
+    <string name="shorts_tab_title">Shorts</string>
+    <string name="shorts_error_loading">Не удалось загрузить Shorts</string>
     <string name="could_not_load_thumbnails">Не удалось загрузить все миниатюры</string>
     <string name="youtube_signature_deobfuscation_error">Не удалось расшифровать подпись URL у видео</string>
     <string name="controls_background_title">В фоне</string>

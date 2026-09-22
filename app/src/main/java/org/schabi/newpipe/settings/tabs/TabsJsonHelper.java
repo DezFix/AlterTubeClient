@@ -23,6 +23,7 @@ public final class TabsJsonHelper {
     private static final List<Tab> FALLBACK_INITIAL_TABS_LIST = Collections.unmodifiableList(
             Arrays.asList(
                     Tab.Type.DEFAULT_KIOSK.getTab(),
+                    Tab.Type.SHORTS.getTab(),
                     Tab.Type.SUBSCRIPTIONS.getTab(),
                     Tab.Type.BOOKMARKS.getTab()));
 

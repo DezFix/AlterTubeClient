@@ -128,7 +128,7 @@ public interface PlaybackResolver extends Resolver<StreamInfo, MediaSource> {
     }
 
     @NonNull
-    static MediaSource buildMediaSource(@NonNull final PlayerDataSource dataSource,
+    public static MediaSource buildMediaSource(@NonNull final PlayerDataSource dataSource,
                                         @NonNull final Stream stream,
                                         @NonNull final StreamInfo streamInfo,
                                         @NonNull final String cacheKey,
