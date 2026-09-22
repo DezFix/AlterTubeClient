@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- YouTube -->
-    <color name="light_youtube_primary_color">#e53935</color>
-    <color name="light_youtube_dark_color">#992722</color>
+    <!-- YouTube (AlterTube tint, sampled from app icon: #FA4E24 -> #BC152F) -->
+    <color name="light_youtube_primary_color">#EA3B1C</color>
+    <color name="light_youtube_dark_color">#A82712</color>
     <color name="light_youtube_accent_color">#000000</color>
-    <color name="light_youtube_statusbar_color">#e53935</color>
+    <color name="light_youtube_statusbar_color">#EA3B1C</color>
 
-    <color name="dark_youtube_primary_color">#992722</color>
-    <color name="dark_youtube_dark_color">#7a1717</color>
+    <color name="dark_youtube_primary_color">#B03218</color>
+    <color name="dark_youtube_dark_color">#7E2312</color>
     <color name="dark_youtube_accent_color">#FFFFFF</color>
-    <color name="dark_youtube_statusbar_color">#992722</color>
+    <color name="dark_youtube_statusbar_color">#B03218</color>
 
     <!-- SoundCloud -->
     <color name="light_soundcloud_primary_color">#f57c00</color>
@@ -69,7 +69,7 @@
     <color name="dark_collector_accent_color">#FFFFFF</color>
     <color name="dark_collector_statusbar_color">#121212</color>
 
-    <color name="main_theme_color">#6f0e3d</color>
+    <color name="main_theme_color">#BC152F</color>
 
 
 </resources>
