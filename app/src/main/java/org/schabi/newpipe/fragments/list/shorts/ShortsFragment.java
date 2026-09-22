@@ -64,6 +64,13 @@ public class ShortsFragment extends Fragment {
 
     private int currentPosition = 0;
     private int resolveToken = 0;
+    private final ViewPager2.OnPageChangeCallback pageCallback =
+            new ViewPager2.OnPageChangeCallback() {
+                @Override
+                public void onPageSelected(final int position) {
+                    playPosition(position);
+                }
+            };
 
     public static ShortsFragment newInstance() {
         return new ShortsFragment();
@@ -94,12 +101,7 @@ public class ShortsFragment extends Fragment {
             }
         });
         binding.shortsPager.setAdapter(adapter);
-        binding.shortsPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-            @Override
-            public void onPageSelected(final int position) {
-                playPosition(position);
-            }
-        });
+        binding.shortsPager.registerOnPageChangeCallback(pageCallback);
         binding.shortsRetryButton.setOnClickListener(v -> loadFeed());
 
         dataSource = new PlayerDataSource(requireContext(), DownloaderImpl.USER_AGENT,
@@ -150,6 +152,7 @@ public class ShortsFragment extends Fragment {
             player.release();
             player = null;
         }
+        binding.shortsPager.unregisterOnPageChangeCallback(pageCallback);
         binding.shortsPager.setAdapter(null);
         binding = null;
     }
@@ -206,7 +209,8 @@ public class ShortsFragment extends Fragment {
 
     private void playPosition(final int position) {
         currentPosition = position;
-        if (player == null || adapter == null || position >= adapter.getItemCount()) {
+        if (player == null || adapter == null
+                || position < 0 || position >= adapter.getItemCount()) {
             return;
         }
         final int token = ++resolveToken;
@@ -221,6 +225,12 @@ public class ShortsFragment extends Fragment {
             holder.loading.setVisibility(View.VISIBLE);
         }
         final String url = adapter.getItem(position).getUrl();
+        if (url == null || url.isEmpty()) {
+            if (position + 1 < adapter.getItemCount()) {
+                binding.shortsPager.setCurrentItem(position + 1, true);
+            }
+            return;
+        }
         disposables.add(ExtractorHelper
                 .getStreamInfo(ServiceList.YouTube.getServiceId(), url, false)
                 .subscribeOn(Schedulers.io())
@@ -233,7 +243,8 @@ public class ShortsFragment extends Fragment {
                             }
                         },
                         throwable -> {
-                            if (token != resolveToken || position != currentPosition) {
+                            if (binding == null
+                                    || token != resolveToken || position != currentPosition) {
                                 return;
                             }
                             // Skip unplayable items automatically.

@@ -77,8 +77,9 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
         holder.thumbnail.setVisibility(View.VISIBLE);
         holder.loading.setVisibility(View.GONE);
         holder.itemView.setOnClickListener(v -> {
-            if (tapListener != null) {
-                tapListener.onPageTap(holder.getBindingAdapterPosition());
+            final int pos = holder.getBindingAdapterPosition();
+            if (tapListener != null && pos != RecyclerView.NO_POSITION) {
+                tapListener.onPageTap(pos);
             }
         });
     }

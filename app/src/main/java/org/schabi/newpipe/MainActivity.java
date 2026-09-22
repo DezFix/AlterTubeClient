@@ -181,6 +181,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onPostCreate(final Bundle savedInstanceState) {
         super.onPostCreate(savedInstanceState);
 
+        // Welcome flow finished this activity in onCreate(): nothing to do here.
+        if (isFinishing()) {
+            return;
+        }
+
         final App app = App.getApp();
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(app);
 
