@@ -32,7 +32,8 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="12dp"
+        android:paddingEnd="76dp">
 
         <TextView
             android:id="@+id/shorts_title"
@@ -53,4 +54,15 @@
             android:textSize="13sp" />
 
     </LinearLayout>
+    <ImageButton
+        android:id="@+id/shorts_share_button"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="120dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/share"
+        android:src="@drawable/ic_share"
+        android:tint="@android:color/white" />
 </FrameLayout>

@@ -29,6 +29,7 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
 
     public interface PageTapListener {
         void onPageTap(int position);
+        void onShareClick(int position);
     }
 
     private final List<StreamInfoItem> items = new ArrayList<>();
@@ -42,6 +43,12 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
         items.clear();
         items.addAll(newItems);
         notifyDataSetChanged();
+    }
+
+    public void addItems(final List<StreamInfoItem> moreItems) {
+        final int start = items.size();
+        items.addAll(moreItems);
+        notifyItemRangeInserted(start, moreItems.size());
     }
 
     public StreamInfoItem getItem(final int position) {
@@ -82,6 +89,12 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
                 tapListener.onPageTap(pos);
             }
         });
+        holder.shareButton.setOnClickListener(v -> {
+            final int pos = holder.getBindingAdapterPosition();
+            if (tapListener != null && pos != RecyclerView.NO_POSITION) {
+                tapListener.onShareClick(pos);
+            }
+        });
     }
 
     static class ShortsPageHolder extends RecyclerView.ViewHolder {
@@ -90,6 +103,7 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
         final TextView title;
         final TextView channel;
         final ProgressBar loading;
+        final View shareButton;
 
         ShortsPageHolder(@NonNull final View itemView) {
             super(itemView);
@@ -98,6 +112,7 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
             title = itemView.findViewById(R.id.shorts_title);
             channel = itemView.findViewById(R.id.shorts_channel);
             loading = itemView.findViewById(R.id.shorts_page_loading);
+            shareButton = itemView.findViewById(R.id.shorts_share_button);
         }
 
         void attachPlayer(final ExoPlayer player) {
