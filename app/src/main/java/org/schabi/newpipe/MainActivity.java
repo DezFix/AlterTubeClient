@@ -139,6 +139,13 @@ public class MainActivity extends AppCompatActivity {
         ThemeHelper.setDayNightMode(this);
         ThemeHelper.setTheme(this, ServiceHelper.getSelectedServiceId(this));
 
+        // First run goes to the single Welcome screen (2 questions), not a stack of popups.
+        if (PreferenceManager.getDefaultSharedPreferences(this).getInt("isFirstRun", 0) == 0) {
+            startActivity(new Intent(this, WelcomeActivity.class));
+            finish();
+            return;
+        }
+
         assureCorrectAppLanguage(this);
         super.onCreate(savedInstanceState);
 
@@ -227,22 +234,6 @@ public class MainActivity extends AppCompatActivity {
         // On fresh install just remember the version: no changelog or donation popups in face.
         prefs.edit().putInt("version_code", currentVersionCode).apply();
         // TODO(AlterTube): own announcements (e.g. via GitHub releases) — upstream wiki removed.
-
-
-        int isFirstRun = prefs.getInt("isFirstRun", 0);
-        if (isFirstRun == 0) {
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            builder.setTitle(R.string.dialog_title_enable_update_checker);
-            builder.setMessage(R.string.dialog_message_enable_update_checker);
-            builder.setPositiveButton(R.string.ok, (dialog, which) -> {
-                prefs.edit().putBoolean(app.getString(R.string.update_app_key), true).apply();
-                NewVersionWorker.enqueueNewVersionCheckingWork(app, true);
-            });
-            builder.setNegativeButton(R.string.no, (dialog, which) -> prefs.edit().putBoolean(app.getString(R.string.update_app_key), false).apply());
-            builder.show();
-            prefs.edit().putInt("isFirstRun", 1).apply();
-            PermissionChecker.checkNotificationPermission(this);
-        }
     }
 
     private void setupDrawer() throws ExtractionException {

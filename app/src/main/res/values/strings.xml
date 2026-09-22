@@ -65,6 +65,10 @@
 <string name="notification_colorize_summary">Have Android customize the notification\'s color according to the main color in the thumbnail (note that this is not available on all devices)</string>
 <string name="play_audio">Audio</string>
 <string name="theme_title">Theme</string>
+    <string name="welcome_title">Welcome to AlterTube</string>
+    <string name="welcome_subtitle">Two quick questions, then you are in</string>
+    <string name="welcome_updates_summary">Notify me about new versions (can be turned off in settings)</string>
+    <string name="welcome_start">Start</string>
 <string name="night_theme_title">Night Theme</string>
 <string name="light_theme_title">Light</string>
 <string name="dark_theme_title">Dark</string>

@@ -27,6 +27,10 @@
     <string name="detail_likes_img_view_description">Likes</string>
     <string name="background_player_playing_toast">Фоновое воспроизведение</string>
     <string name="theme_title">Тема</string>
+    <string name="welcome_title">Добро пожаловать в AlterTube</string>
+<string name="welcome_subtitle">Два быстрых вопроса — и вперёд</string>
+<string name="welcome_updates_summary">Уведомлять о новых версиях (можно отключить в настройках)</string>
+<string name="welcome_start">Начать</string>
     <string name="dark_theme_title">Тёмная</string>
     <string name="light_theme_title">Светлая</string>
     <string name="network_error">Ошибка сети</string>
