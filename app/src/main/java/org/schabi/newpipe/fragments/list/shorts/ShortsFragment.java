@@ -20,8 +20,11 @@ import org.schabi.newpipe.DownloaderImpl;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.FragmentShortsBinding;
 import org.schabi.newpipe.extractor.InfoItem;
+import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;
+import org.schabi.newpipe.extractor.StreamingService;
 import org.schabi.newpipe.extractor.search.SearchInfo;
+import org.schabi.newpipe.extractor.search.filter.FilterItem;
 import org.schabi.newpipe.extractor.stream.Stream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
@@ -39,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
@@ -161,9 +165,24 @@ public class ShortsFragment extends Fragment {
         binding.shortsLoading.setVisibility(View.VISIBLE);
         binding.shortsErrorBox.setVisibility(View.GONE);
 
-        disposables.add(ExtractorHelper
-                .searchFor(ServiceList.YouTube.getServiceId(), SHORTS_QUERY,
-                        Collections.emptyList(), Collections.emptyList())
+        // NB: the extractor requires a non-empty content filter ("all"),
+        // otherwise YoutubeFilters throws. The handler is also built eagerly
+        // (outside Rx), so guard the whole call against synchronous throws.
+        final Single<SearchInfo> search;
+        try {
+            final StreamingService service =
+                    NewPipe.getService(ServiceList.YouTube.getServiceId());
+            final List<FilterItem> contentFilter = Collections.singletonList(
+                    service.getSearchQHFactory().getFilterItem(0)); // "all"
+            search = ExtractorHelper.searchFor(ServiceList.YouTube.getServiceId(),
+                    SHORTS_QUERY, contentFilter, Collections.emptyList());
+        } catch (final Exception e) {
+            binding.shortsLoading.setVisibility(View.GONE);
+            binding.shortsErrorBox.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        disposables.add(search
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(this::onFeedLoaded, throwable -> {
