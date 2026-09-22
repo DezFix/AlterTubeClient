@@ -55,8 +55,9 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 public class ShortsFragment extends Fragment {
 
     private static final String SHORTS_QUERY = "#shorts";
-    /** Fallback: treat anything up to 2 minutes as a short. */
-    private static final long MAX_SHORT_DURATION_SECONDS = 120;
+    /** YouTube allows shorts up to 3 minutes; unknown duration (-1) is also accepted. */
+    private static final long MAX_SHORT_DURATION_SECONDS = 180;
+    private static final String PREF_AUTO_ADVANCE = "shorts_auto_advance";
 
     private FragmentShortsBinding binding;
     private ShortsPagerAdapter adapter;
@@ -68,6 +69,8 @@ public class ShortsFragment extends Fragment {
 
     private int currentPosition = 0;
     private int resolveToken = 0;
+    private boolean muted = false;
+    private boolean autoAdvance = false;
     private final ViewPager2.OnPageChangeCallback pageCallback =
             new ViewPager2.OnPageChangeCallback() {
                 @Override
@@ -105,13 +108,22 @@ public class ShortsFragment extends Fragment {
             }
         });
         binding.shortsPager.setAdapter(adapter);
+        binding.shortsPager.setUserInputEnabled(true);
+        binding.shortsPager.setOffscreenPageLimit(1);
         binding.shortsPager.registerOnPageChangeCallback(pageCallback);
         binding.shortsRetryButton.setOnClickListener(v -> loadFeed());
+
+        autoAdvance = androidx.preference.PreferenceManager
+                .getDefaultSharedPreferences(requireContext())
+                .getBoolean(PREF_AUTO_ADVANCE, false);
+        binding.shortsMuteButton.setOnClickListener(v -> toggleMute());
+        binding.shortsAutoadvanceButton.setOnClickListener(v -> toggleAutoAdvance());
+        updateButtons();
 
         dataSource = new PlayerDataSource(requireContext(), DownloaderImpl.USER_AGENT,
                 new DefaultBandwidthMeter.Builder(requireContext()).build());
         player = new ExoPlayer.Builder(requireContext()).build();
-        player.setRepeatMode(Player.REPEAT_MODE_ONE);
+        applyRepeatMode();
         player.addListener(new Player.Listener() {
             @Override
             public void onPlaybackStateChanged(final int state) {
@@ -124,11 +136,48 @@ public class ShortsFragment extends Fragment {
                     holder.thumbnail.setVisibility(View.GONE);
                 } else if (state == Player.STATE_BUFFERING) {
                     holder.loading.setVisibility(View.VISIBLE);
+                } else if (state == Player.STATE_ENDED && autoAdvance
+                        && binding != null && adapter != null
+                        && currentPosition + 1 < adapter.getItemCount()) {
+                    binding.shortsPager.setCurrentItem(currentPosition + 1, true);
                 }
             }
         });
 
         loadFeed();
+    }
+
+    private void toggleMute() {
+        muted = !muted;
+        if (player != null) {
+            player.setVolume(muted ? 0f : 1f);
+        }
+        updateButtons();
+    }
+
+    private void toggleAutoAdvance() {
+        autoAdvance = !autoAdvance;
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireContext())
+                .edit().putBoolean(PREF_AUTO_ADVANCE, autoAdvance).apply();
+        applyRepeatMode();
+        updateButtons();
+    }
+
+    private void applyRepeatMode() {
+        if (player != null) {
+            player.setRepeatMode(autoAdvance ? Player.REPEAT_MODE_OFF : Player.REPEAT_MODE_ONE);
+        }
+    }
+
+    private void updateButtons() {
+        if (binding == null) {
+            return;
+        }
+        binding.shortsMuteButton.setImageResource(
+                muted ? R.drawable.ic_volume_off : R.drawable.ic_volume_up);
+        binding.shortsAutoadvanceButton.setImageTintList(
+                android.content.res.ColorStateList.valueOf(
+                        autoAdvance ? 0xFFFFFFFF : 0x80FFFFFF));
     }
 
     @Override
@@ -208,8 +257,11 @@ public class ShortsFragment extends Fragment {
             final StreamInfoItem streamItem = (StreamInfoItem) item;
             final String url = streamItem.getUrl() == null ? "" : streamItem.getUrl();
             final long duration = streamItem.getDuration();
+            // "#shorts" results are mostly shorts; accept /shorts/ links,
+            // items up to 3 minutes and items with unknown duration.
             final boolean looksLikeShort = url.contains("/shorts/")
-                    || (duration > 0 && duration <= MAX_SHORT_DURATION_SECONDS);
+                    || duration <= 0
+                    || duration <= MAX_SHORT_DURATION_SECONDS;
             if (looksLikeShort) {
                 shorts.add(streamItem);
             }

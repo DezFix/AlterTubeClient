@@ -262,6 +262,8 @@
     <string name="retry">Retry</string>
     <string name="shorts_tab_title">Shorts</string>
     <string name="shorts_error_loading">Couldn\'t load Shorts</string>
+    <string name="shorts_mute">Sound on/off</string>
+    <string name="shorts_autoadvance">Auto-advance to next Short</string>
 <string name="short_thousand">k</string>
 <string name="short_million">M</string>
 <string name="short_billion">B</string>
