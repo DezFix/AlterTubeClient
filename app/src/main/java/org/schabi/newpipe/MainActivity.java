@@ -278,19 +278,7 @@ public class MainActivity extends AppCompatActivity {
      * @throws ExtractionException if the service didn't provide available kiosks
      */
     private void addDrawerMenuForCurrentService() throws ExtractionException {
-        //Tabs
-        final int currentServiceId = ServiceHelper.getSelectedServiceId(this);
-        final StreamingService service = NewPipe.getService(currentServiceId);
-
-        int kioskId = 0;
-
-        for (final String ks : service.getKioskList().getAvailableKiosks()) {
-            drawerLayoutBinding.navigation.getMenu()
-                    .add(R.id.menu_tabs_group, kioskId, 0, KioskTranslator
-                            .getTranslatedKioskName(ks, this))
-                    .setIcon(KioskTranslator.getKioskIcon(ks));
-            kioskId++;
-        }
+        //Tabs (AlterTube: no kiosk rows like Trending — YouTube-only feed navigation)
 
         drawerLayoutBinding.navigation.getMenu()
                 .add(R.id.menu_tabs_group, ITEM_ID_SUBSCRIPTIONS, ORDER,
@@ -366,20 +354,7 @@ public class MainActivity extends AppCompatActivity {
                 NavigationHelper.openStatisticFragment(getSupportFragmentManager());
                 break;
             default:
-                final int currentServiceId = ServiceHelper.getSelectedServiceId(this);
-                final StreamingService service = NewPipe.getService(currentServiceId);
-                String serviceName = "";
-
-                int kioskId = 0;
-                for (final String ks : service.getKioskList().getAvailableKiosks()) {
-                    if (kioskId == item.getItemId()) {
-                        serviceName = ks;
-                    }
-                    kioskId++;
-                }
-
-                NavigationHelper.openKioskFragment(getSupportFragmentManager(), currentServiceId,
-                        serviceName);
+                // No kiosk rows in the AlterTube drawer.
                 break;
         }
     }

@@ -542,7 +542,18 @@ public class ShortsFragment extends Fragment {
             } catch (final Exception ignored) {
                 // no history: generic feed below
             }
-            // 3) generic fallback (also covers fresh installs), shuffled per session
+            // 3) topic words from recent watch titles (games -> games, anime -> anime)
+            try {
+                final List<StreamHistoryEntry> history = new HistoryRecordManager(ctx)
+                        .getStreamHistorySortedById()
+                        .blockingFirst(new ArrayList<>());
+                for (final String keyword : topTitleKeywords(history, 3)) {
+                    queries.add(keyword + " shorts");
+                }
+            } catch (final Exception ignored) {
+                // no history: generic feed below
+            }
+            // 4) generic fallback (also covers fresh installs), shuffled per session
             final List<String> generic =
                     new ArrayList<>(java.util.Arrays.asList(GENERIC_QUERIES));
             Collections.shuffle(generic);
@@ -562,6 +573,72 @@ public class ShortsFragment extends Fragment {
         } catch (final Exception e) {
             return null;
         }
+    }
+
+    private static final java.util.Set<String> TITLE_STOP_WORDS =
+            new java.util.HashSet<>(java.util.Arrays.asList(
+                    // RU junk
+                    "видео", "смотреть", "онлайн", "новый", "новая", "новое", "новые",
+                    "часть", "выпуск", "обзор", "прохождение", "стрим", "клип",
+                    "песня", "трек", "хит", "топ", "film", "серия", "сезон",
+                    "все", "это", "как", "для", "при", "или", "уже", "еще",
+                    "меня", "тебя", "себя", "нас", "вас", "них", "него", "нее",
+                    "который", "которая", "которые", "такой", "такая", "самый",
+                    "мой", "моя", "мое", "твой", "твоя", "наш", "ваш",
+                    // EN junk
+                    "video", "videos", "official", "music", "shorts", "short",
+                    "lyric", "lyrics", "cover", "remix", "live", "full",
+                    "episode", "part", "with", "from", "this", "that",
+                    "what", "when", "your", "about", "there", "their", "have",
+                    "movie", "film", "best", "2024", "2025", "2026", "song",
+                    "songs", "hits", "top", "audio", "sound", "free", "watch"
+            ));
+
+    /**
+     * Most frequent meaningful words from recent watch titles,
+     * e.g. watched Arknights -> "arknights", watched Dota -> "dota".
+     */
+    private List<String> topTitleKeywords(final List<StreamHistoryEntry> history,
+                                          final int limit) {
+        final java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        int scanned = 0;
+        for (int i = history.size() - 1; i >= 0 && scanned < 25; i--, scanned++) {
+            final StreamEntity stream = history.get(i).getStreamEntity();
+            if (stream.getServiceId() != ServiceList.YouTube.getServiceId()
+                    || stream.getTitle() == null) {
+                continue;
+            }
+            final String[] tokens = stream.getTitle()
+                    .toLowerCase(java.util.Locale.ROOT).split("[^\\p{L}\\p{N}]+");
+            for (final String token : tokens) {
+                if (token.length() < 4 || TITLE_STOP_WORDS.contains(token)) {
+                    continue;
+                }
+                boolean digitsOnly = true;
+                for (int c = 0; c < token.length(); c++) {
+                    if (!Character.isDigit(token.charAt(c))) {
+                        digitsOnly = false;
+                        break;
+                    }
+                }
+                if (digitsOnly) {
+                    continue;
+                }
+                counts.put(token, counts.getOrDefault(token, 0) + 1);
+            }
+        }
+        final List<java.util.Map.Entry<String, Integer>> sorted =
+                new ArrayList<>(counts.entrySet());
+        Collections.sort(sorted,
+                (a, b) -> Integer.compare(b.getValue(), a.getValue()));
+        final List<String> top = new ArrayList<>();
+        for (final java.util.Map.Entry<String, Integer> e : sorted) {
+            if (top.size() >= limit || e.getValue() < 2) {
+                break;
+            }
+            top.add(e.getKey());
+        }
+        return top;
     }
 
     private List<FilterItem> allFilter() {
