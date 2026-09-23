@@ -291,7 +291,7 @@ public class ShortsFragment extends Fragment {
                     final SubscriptionManager manager = new SubscriptionManager(ctx);
                     final boolean subscribed = manager.subscriptionTable()
                             .getSubscription(serviceId, channelUrl)
-                            .isEmpty().blockingGet();
+                            .blockingGet() != null;
                     if (subscribed) {
                         manager.deleteSubscription(serviceId, channelUrl).blockingAwait();
                         return false;
@@ -334,11 +334,11 @@ public class ShortsFragment extends Fragment {
         }
         final int serviceId = ServiceList.YouTube.getServiceId();
         disposables.add(Single.fromCallable(() ->
-                        !new SubscriptionManager(
+                        new SubscriptionManager(
                                 requireContext().getApplicationContext())
                                 .subscriptionTable()
                                 .getSubscription(serviceId, channelUrl)
-                                .isEmpty(false).blockingGet())
+                                .blockingGet() != null)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(subscribed -> {
