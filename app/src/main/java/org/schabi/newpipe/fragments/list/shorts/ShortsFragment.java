@@ -42,6 +42,8 @@ import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.resolver.PlaybackResolver;
 import org.schabi.newpipe.util.ContentFilter;
 import org.schabi.newpipe.util.ExtractorHelper;
+import org.schabi.newpipe.util.NavigationHelper;
+import org.schabi.newpipe.util.PicassoHelper;
 import org.schabi.newpipe.util.external_communication.ShareUtils;
 
 import java.util.ArrayList;
@@ -72,6 +74,9 @@ public class ShortsFragment extends Fragment {
     private static final String PREF_AUTO_ADVANCE = "shorts_auto_advance";
     /** When this close to the tail, fetch the next page (TikTok-style endless feed). */
     private static final int PREFETCH_TAIL = 3;
+    private static final int MENU_OPEN_AS_VIDEO = 1;
+    private static final int MENU_COPY_LINK = 2;
+    private static final int MENU_AUTO_ADVANCE = 3;
 
     private FragmentShortsBinding binding;
     private ShortsPagerAdapter adapter;
@@ -123,22 +128,22 @@ public class ShortsFragment extends Fragment {
         adapter.setTapListener(new ShortsPagerAdapter.PageTapListener() {
             @Override
             public void onPageTap(final int position) {
-                if (player != null && position == currentPosition) {
-                    if (player.isPlaying()) {
-                        player.pause();
-                    } else {
-                        player.play();
-                    }
-                }
+                togglePlayPause();
             }
 
             @Override
             public void onShareClick(final int position) {
-                if (adapter == null || position < 0 || position >= adapter.getItemCount()) {
-                    return;
-                }
-                final StreamInfoItem item = adapter.getItem(position);
-                ShareUtils.shareText(requireContext(), item.getName(), item.getUrl());
+                shareCurrent();
+            }
+
+            @Override
+            public void onCommentsClick(final int position) {
+                openComments(position);
+            }
+
+            @Override
+            public void onSubscribeClick(final int position) {
+                toggleSubscribe(position);
             }
         });
         binding.shortsPager.setAdapter(adapter);
@@ -151,9 +156,10 @@ public class ShortsFragment extends Fragment {
         autoAdvance = androidx.preference.PreferenceManager
                 .getDefaultSharedPreferences(requireContext())
                 .getBoolean(PREF_AUTO_ADVANCE, false);
+        binding.shortsPlayButton.setOnClickListener(v -> togglePlayPause());
         binding.shortsMuteButton.setOnClickListener(v -> toggleMute());
-        binding.shortsAutoadvanceButton.setOnClickListener(v -> toggleAutoAdvance());
-        updateButtons();
+        binding.shortsMenuButton.setOnClickListener(v -> showMenu());
+        updateTopBar();
 
         dataSource = new PlayerDataSource(requireContext(), DownloaderImpl.USER_AGENT,
                 new DefaultBandwidthMeter.Builder(requireContext()).build());
@@ -177,6 +183,16 @@ public class ShortsFragment extends Fragment {
                     binding.shortsPager.setCurrentItem(currentPosition + 1, true);
                 }
             }
+
+            @Override
+            public void onIsPlayingChanged(final boolean isPlaying) {
+                updateTopBar();
+                if (isPlaying) {
+                    startProgressUpdates();
+                } else {
+                    stopProgressUpdates();
+                }
+            }
         });
 
         if (!feedModel.getItems().isEmpty()) {
@@ -196,12 +212,24 @@ public class ShortsFragment extends Fragment {
         }
     }
 
+    private void togglePlayPause() {
+        if (player == null) {
+            return;
+        }
+        if (player.isPlaying()) {
+            player.pause();
+        } else {
+            player.play();
+        }
+        updateTopBar();
+    }
+
     private void toggleMute() {
         muted = !muted;
         if (player != null) {
             player.setVolume(muted ? 0f : 1f);
         }
-        updateButtons();
+        updateTopBar();
     }
 
     private void toggleAutoAdvance() {
@@ -209,7 +237,6 @@ public class ShortsFragment extends Fragment {
         androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireContext())
                 .edit().putBoolean(PREF_AUTO_ADVANCE, autoAdvance).apply();
         applyRepeatMode();
-        updateButtons();
     }
 
     private void applyRepeatMode() {
@@ -218,20 +245,178 @@ public class ShortsFragment extends Fragment {
         }
     }
 
-    private void updateButtons() {
+    private void updateTopBar() {
         if (binding == null) {
             return;
         }
+        binding.shortsPlayButton.setImageResource(
+                player != null && player.isPlaying()
+                        ? R.drawable.ic_pause : R.drawable.ic_play_arrow);
         binding.shortsMuteButton.setImageResource(
                 muted ? R.drawable.ic_volume_off : R.drawable.ic_volume_up);
-        binding.shortsAutoadvanceButton.setImageTintList(
-                android.content.res.ColorStateList.valueOf(
-                        autoAdvance ? 0xFFFFFFFF : 0x80FFFFFF));
+    }
+
+    private void shareCurrent() {
+        if (adapter == null
+                || currentPosition < 0 || currentPosition >= adapter.getItemCount()) {
+            return;
+        }
+        final StreamInfoItem item = adapter.getItem(currentPosition);
+        ShareUtils.shareText(requireContext(), item.getName(), item.getUrl());
+    }
+
+    private void openComments(final int position) {
+        if (adapter == null || position < 0 || position >= adapter.getItemCount()) {
+            return;
+        }
+        final StreamInfoItem item = adapter.getItem(position);
+        ShortsCommentsSheet.newInstance(item.getUrl(), item.getName())
+                .show(getChildFragmentManager(), "shorts_comments");
+    }
+
+    private void toggleSubscribe(final int position) {
+        if (adapter == null || position < 0 || position >= adapter.getItemCount()) {
+            return;
+        }
+        final StreamInfoItem item = adapter.getItem(position);
+        final String channelUrl = item.getUploaderUrl();
+        if (channelUrl == null || channelUrl.isEmpty()) {
+            return;
+        }
+        final int serviceId = ServiceList.YouTube.getServiceId();
+        final String name = item.getUploaderName() == null ? "" : item.getUploaderName();
+        disposables.add(Single.fromCallable(() -> {
+                    final android.content.Context ctx =
+                            requireContext().getApplicationContext();
+                    final SubscriptionManager manager = new SubscriptionManager(ctx);
+                    final boolean subscribed = manager.subscriptionTable()
+                            .getSubscription(serviceId, channelUrl)
+                            .isEmpty().blockingGet();
+                    if (subscribed) {
+                        manager.deleteSubscription(serviceId, channelUrl).blockingAwait();
+                        return false;
+                    }
+                    String avatar = null;
+                    final StreamInfo cached = infoCache.get(position);
+                    if (cached != null && cached.getUploaderAvatarUrl() != null
+                            && !cached.getUploaderAvatarUrl().isEmpty()) {
+                        avatar = cached.getUploaderAvatarUrl();
+                    }
+                    final SubscriptionEntity entity = new SubscriptionEntity();
+                    entity.setServiceId(serviceId);
+                    entity.setUrl(channelUrl);
+                    entity.setName(name);
+                    if (avatar != null) {
+                        entity.setAvatarUrl(avatar);
+                    }
+                    manager.subscriptionTable().insert(entity);
+                    return true;
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(subscribed -> {
+                    final ShortsPageHolder holder = holderAt(position);
+                    if (holder != null) {
+                        holder.subscribeButton.setText(subscribed
+                                ? R.string.shorts_subscribed : R.string.shorts_subscribe);
+                    }
+                    android.widget.Toast.makeText(requireContext(), subscribed
+                            ? R.string.shorts_subscribed_toast : R.string.shorts_unsubscribed_toast,
+                            android.widget.Toast.LENGTH_SHORT).show();
+                }, throwable -> { /* best effort */ }));
+    }
+
+    private void refreshSubscribeState(final ShortsPageHolder holder,
+                                       final String channelUrl) {
+        holder.subscribeButton.setText(R.string.shorts_subscribe);
+        if (channelUrl == null || channelUrl.isEmpty()) {
+            return;
+        }
+        final int serviceId = ServiceList.YouTube.getServiceId();
+        disposables.add(Single.fromCallable(() ->
+                        !new SubscriptionManager(
+                                requireContext().getApplicationContext())
+                                .subscriptionTable()
+                                .getSubscription(serviceId, channelUrl)
+                                .isEmpty(false).blockingGet())
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(subscribed -> {
+                    if (holder.getBindingAdapterPosition() == RecyclerView.NO_POSITION) {
+                        return;
+                    }
+                    holder.subscribeButton.setText(subscribed
+                            ? R.string.shorts_subscribed : R.string.shorts_subscribe);
+                }, throwable -> { /* best effort */ }));
+    }
+
+    private final Runnable progressUpdater = new Runnable() {
+        @Override
+        public void run() {
+            if (player != null && binding != null && player.isPlaying()) {
+                final ShortsPageHolder holder = currentHolder();
+                if (holder != null) {
+                    final long duration = player.getDuration();
+                    final long position = player.getCurrentPosition();
+                    if (duration > 0) {
+                        holder.progress.setProgress(
+                                (int) (1000L * position / duration));
+                    }
+                }
+                startProgressUpdates();
+            }
+        }
+    };
+
+    private void startProgressUpdates() {
+        stopProgressUpdates();
+        if (binding != null) {
+            binding.getRoot().postDelayed(progressUpdater, 500);
+        }
+    }
+
+    private void stopProgressUpdates() {
+        if (binding != null) {
+            binding.getRoot().removeCallbacks(progressUpdater);
+        }
+    }
+
+    private void showMenu() {
+        if (getContext() == null || adapter == null
+                || currentPosition < 0 || currentPosition >= adapter.getItemCount()) {
+            return;
+        }
+        final StreamInfoItem item = adapter.getItem(currentPosition);
+        final androidx.appcompat.widget.PopupMenu menu =
+                new androidx.appcompat.widget.PopupMenu(requireContext(),
+                        binding.shortsMenuButton);
+        menu.getMenu().add(0, MENU_OPEN_AS_VIDEO, 0, R.string.shorts_open_as_video);
+        menu.getMenu().add(0, MENU_COPY_LINK, 1, R.string.shorts_copy_link);
+        menu.getMenu().add(0, MENU_AUTO_ADVANCE, 2, R.string.shorts_autoadvance)
+                .setCheckable(true).setChecked(autoAdvance);
+        menu.setOnMenuItemClickListener(menuItem -> {
+            final int id = menuItem.getItemId();
+            if (id == MENU_OPEN_AS_VIDEO) {
+                NavigationHelper.openVideoDetailFragment(requireContext(),
+                        getParentFragmentManager(),
+                        item.getServiceId(), item.getUrl(), item.getName(), null, false);
+                return true;
+            } else if (id == MENU_COPY_LINK) {
+                ShareUtils.copyToClipboard(requireContext(), item.getUrl());
+                return true;
+            } else if (id == MENU_AUTO_ADVANCE) {
+                toggleAutoAdvance();
+                return true;
+            }
+            return false;
+        });
+        menu.show();
     }
 
     @Override
     public void onPause() {
         super.onPause();
+        stopProgressUpdates();
         if (player != null) {
             player.pause();
         }
@@ -250,6 +435,7 @@ public class ShortsFragment extends Fragment {
         super.onDestroyView();
         resolveToken++;
         disposables.clear();
+        stopProgressUpdates();
         if (player != null) {
             player.release();
             player = null;
@@ -616,6 +802,7 @@ public class ShortsFragment extends Fragment {
             holder.thumbnail.setVisibility(View.VISIBLE);
             holder.loading.setVisibility(View.VISIBLE);
             holder.attachPlayer(player);
+            fillChannelRow(holder, info);
             player.setMediaSource(source);
             player.prepare();
             player.play();
@@ -629,6 +816,18 @@ public class ShortsFragment extends Fragment {
                 binding.shortsPager.setCurrentItem(position + 1, true);
             }
         }
+    }
+
+    /** Channel row: avatar, sound line and subscribe state for the page. */
+    private void fillChannelRow(final ShortsPageHolder holder, final StreamInfo info) {
+        final String avatarUrl = info.getUploaderAvatarUrl();
+        if (avatarUrl != null && !avatarUrl.isEmpty()) {
+            PicassoHelper.loadAvatar(avatarUrl).into(holder.avatar);
+        }
+        final String uploader = info.getUploaderName() == null ? "" : info.getUploaderName();
+        holder.sound.setText(
+                getString(R.string.shorts_original_sound, uploader));
+        refreshSubscribeState(holder, info.getUploaderUrl());
     }
 
     /** Resolves a page ahead in background so swiping plays instantly. */

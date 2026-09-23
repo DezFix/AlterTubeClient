@@ -27,6 +27,38 @@
         android:layout_gravity="center"
         android:visibility="gone" />
 
+    <!-- Right action rail: comments, share -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="150dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <ImageButton
+            android:id="@+id/shorts_comments_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/shorts_comments"
+            android:src="@drawable/ic_comment"
+            android:tint="@android:color/white" />
+
+        <ImageButton
+            android:id="@+id/shorts_share_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/share"
+            android:src="@drawable/ic_share"
+            android:tint="@android:color/white" />
+
+    </LinearLayout>
+
+    <!-- Bottom info: avatar + handle + subscribe, title, sound -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -35,34 +67,74 @@
         android:padding="12dp"
         android:paddingEnd="76dp">
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/shorts_avatar"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:scaleType="centerCrop"
+                app:shapeAppearance="@style/ShapeAppearance_Material3_Corner_Full" />
+
+            <TextView
+                android:id="@+id/shorts_channel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/shorts_subscribe_button"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="0dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="@string/shorts_subscribe"
+                android:textSize="13sp" />
+
+        </LinearLayout>
+
         <TextView
             android:id="@+id/shorts_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:ellipsize="end"
             android:maxLines="2"
             android:textColor="@android:color/white"
-            android:textSize="15sp"
-            android:textStyle="bold" />
+            android:textSize="14sp" />
 
         <TextView
-            android:id="@+id/shorts_channel"
+            android:id="@+id/shorts_sound"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:textColor="#B3FFFFFF"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
 
     </LinearLayout>
-    <ImageButton
-        android:id="@+id/shorts_share_button"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="12dp"
-        android:layout_marginBottom="120dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/share"
-        android:src="@drawable/ic_share"
-        android:tint="@android:color/white" />
+
+    <ProgressBar
+        android:id="@+id/shorts_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_gravity="bottom"
+        android:max="1000"
+        android:progressTint="#EA3B1C"
+        android:progressBackgroundTint="#33FFFFFF" />
+
 </FrameLayout>
