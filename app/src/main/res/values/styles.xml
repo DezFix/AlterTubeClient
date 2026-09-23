@@ -1,5 +1,11 @@
 <resources>
 
+    <!-- Circle shape for avatars (ShapeableImageView) -->
+    <style name="ShapeAppearance.AlterTube.Circle" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
     <!-- Opening Theme -->
     <style name="Base.V19.OpeningTheme" parent="Theme.AppCompat.DayNight.NoActionBar"/>
     <style name="Base.OpeningTheme" parent="Base.V19.OpeningTheme"/>

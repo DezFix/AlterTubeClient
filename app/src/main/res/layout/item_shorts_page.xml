@@ -78,7 +78,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:scaleType="centerCrop"
-                app:shapeAppearance="@style/ShapeAppearance_Material3_Corner_Full" />
+                app:shapeAppearance="@style/ShapeAppearance.AlterTube.Circle" />
 
             <TextView
                 android:id="@+id/shorts_channel"
