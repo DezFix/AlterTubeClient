@@ -243,10 +243,14 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
             seeking = false;
         }
 
-        void attachPlayer(final ExoPlayer player) {
+        void attachPlayer(final ExoPlayer player, final boolean keepScreenOn) {
             playerView.setPlayer(player);
             playerView.setKeepContentOnPlayerReset(true);
-            itemView.setKeepScreenOn(true);
+            itemView.setKeepScreenOn(keepScreenOn);
+        }
+
+        void setKeepScreenOn(final boolean keepScreenOn) {
+            itemView.setKeepScreenOn(keepScreenOn);
         }
 
         void detachPlayer() {

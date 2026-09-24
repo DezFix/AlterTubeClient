@@ -236,8 +236,8 @@ public final class ServiceHelper {
         final SharedPreferences sharedPreferences = PreferenceManager
                 .getDefaultSharedPreferences(context);
             final String storedCookies = YouTubeCredentialStore.getCookies(context);
-        final String tokens = YouTubeCredentialStore.hasSessionCookie(storedCookies)
-                ? storedCookies : null;
+        final boolean hasSession = YouTubeCredentialStore.hasSessionCookie(storedCookies);
+        final String tokens = hasSession ? storedCookies : null;
             final String audioLanguage = sharedPreferences.getString(context.getString(
                     R.string.preferred_audio_language_key),"original");
             final String autoTranslatedSubtitlesLanguage = sharedPreferences.getString(context.getString(
@@ -249,7 +249,7 @@ public final class ServiceHelper {
             ServiceList.YouTube.setAudioLanguage(audioLanguage);
             ServiceList.YouTube.setShowAutoTranslatedSubtitles(showAutoTranslatedSubtitles);
             ServiceList.YouTube.setAutoTranslatedSubtitlesLanguage(autoTranslatedSubtitlesLanguage);
-            final String pot = YouTubeCredentialStore.getPoToken(context);
+            final String pot = hasSession ? YouTubeCredentialStore.getPoToken(context) : null;
             ServiceList.YouTube.setAdditionalTokens(pot);
     }
 

@@ -111,28 +111,41 @@ public final class YouTubeCredentialStore {
         SharedPreferences securePreferences = appContext.getSharedPreferences(
                 SECURE_PREFS, Context.MODE_PRIVATE);
         synchronized (LOCK) {
-            String encryptedCookies = encryptOrNull(cookies);
-            String encryptedPoToken = encryptOrNull(poToken);
-            if (hasText(cookies) && encryptedCookies == null) {
-                throw new IllegalStateException("Credential encryption unavailable");
-            }
-            if (hasText(poToken) && encryptedPoToken == null) {
-                throw new IllegalStateException("Credential encryption unavailable");
-            }
-            SharedPreferences.Editor defaultEditor = preferences.edit();
-            SharedPreferences.Editor secureEditor = securePreferences.edit();
-            if (!hasText(cookies)) {
+            if (!hasSessionCookie(cookies)) {
                 throw new IllegalStateException("YouTube session cookies are required");
             }
-            defaultEditor.putString(COOKIE_KEY, encryptedCookies);
-            secureEditor.putString(SECURE_COOKIE_KEY, encryptedCookies);
+            String encryptedCookies = encryptOrNull(cookies);
+            String encryptedPoToken = encryptOrNull(poToken);
+            if (encryptedCookies == null
+                    || (hasText(poToken) && encryptedPoToken == null)) {
+                throw new IllegalStateException("Credential encryption unavailable");
+            }
+            Map<String, String> previousDefaultValues = snapshotCredentialValues(
+                    preferences, COOKIE_KEY, PO_TOKEN_KEY);
+            Map<String, String> previousSecureValues = snapshotCredentialValues(
+                    securePreferences, SECURE_COOKIE_KEY, SECURE_PO_TOKEN_KEY);
+            SharedPreferences.Editor defaultEditor = preferences.edit()
+                    .putString(COOKIE_KEY, encryptedCookies);
+            SharedPreferences.Editor secureEditor = securePreferences.edit()
+                    .putString(SECURE_COOKIE_KEY, encryptedCookies);
             if (hasText(poToken)) {
                 defaultEditor.putString(PO_TOKEN_KEY, encryptedPoToken);
                 secureEditor.putString(SECURE_PO_TOKEN_KEY, encryptedPoToken);
+            } else {
+                defaultEditor.remove(PO_TOKEN_KEY);
+                secureEditor.remove(SECURE_PO_TOKEN_KEY);
             }
-            boolean defaultCommitted = defaultEditor.commit();
             boolean secureCommitted = secureEditor.commit();
+            boolean defaultCommitted = secureCommitted && defaultEditor.commit();
             if (!defaultCommitted || !secureCommitted) {
+                boolean defaultRestored = restoreCredentialValues(
+                        preferences, previousDefaultValues, COOKIE_KEY, PO_TOKEN_KEY);
+                boolean secureRestored = restoreCredentialValues(
+                        securePreferences, previousSecureValues,
+                        SECURE_COOKIE_KEY, SECURE_PO_TOKEN_KEY);
+                if (!defaultRestored || !secureRestored) {
+                    disableCredentialState(preferences, securePreferences);
+                }
                 throw new IllegalStateException("Credential state could not be stored");
             }
         }
@@ -144,12 +157,18 @@ public final class YouTubeCredentialStore {
         SharedPreferences securePreferences = appContext.getSharedPreferences(
                 SECURE_PREFS, Context.MODE_PRIVATE);
         synchronized (LOCK) {
-            preferences.edit()
+            boolean secureCommitted = securePreferences.edit()
+                    .remove(SECURE_COOKIE_KEY)
+                    .remove(SECURE_PO_TOKEN_KEY)
+                    .commit();
+            boolean defaultCommitted = preferences.edit()
                     .remove(COOKIE_KEY)
                     .remove(PO_TOKEN_KEY)
                     .commit();
-            securePreferences.edit().clear().commit();
             deleteKey();
+            if (!defaultCommitted || !secureCommitted) {
+                disableCredentialState(preferences, securePreferences);
+            }
         }
     }
 
@@ -331,6 +350,47 @@ public final class YouTubeCredentialStore {
 
     private static boolean hasText(String value) {
         return value != null && !value.isEmpty();
+    }
+
+    private static Map<String, String> snapshotCredentialValues(
+            SharedPreferences preferences, String... keys) {
+        Map<String, String> values = new HashMap<>();
+        Map<String, ?> allValues = preferences.getAll();
+        for (String key : keys) {
+            Object value = allValues.get(key);
+            if (value instanceof String) {
+                values.put(key, (String) value);
+            }
+        }
+        return values;
+    }
+
+    private static boolean restoreCredentialValues(SharedPreferences preferences,
+                                                    Map<String, String> values,
+                                                    String... keys) {
+        SharedPreferences.Editor editor = preferences.edit();
+        for (String key : keys) {
+            String value = values.get(key);
+            if (value == null) {
+                editor.remove(key);
+            } else {
+                editor.putString(key, value);
+            }
+        }
+        return editor.commit();
+    }
+
+    private static void disableCredentialState(SharedPreferences preferences,
+                                               SharedPreferences securePreferences) {
+        preferences.edit()
+                .remove(COOKIE_KEY)
+                .remove(PO_TOKEN_KEY)
+                .commit();
+        securePreferences.edit()
+                .remove(SECURE_COOKIE_KEY)
+                .remove(SECURE_PO_TOKEN_KEY)
+                .commit();
+        deleteKey();
     }
 
     private static String secureKeyFor(String preferenceKey) {

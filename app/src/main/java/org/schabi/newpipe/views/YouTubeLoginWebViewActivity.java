@@ -4,14 +4,19 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
+import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import androidx.annotation.Nullable;
+import androidx.webkit.Profile;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
 
 import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper;
 import org.schabi.newpipe.youtube.YouTubeCredentialStore;
@@ -32,6 +37,8 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
     public static final String EXTRA_SYNC_ONLY = "youtube_sync_only";
     public static final String EXTRA_SUBSCRIPTIONS_CACHE_PATH =
             "youtube_subscriptions_cache_path";
+    public static final String EXTRA_SUBSCRIPTIONS_UNAVAILABLE =
+            "youtube_subscriptions_unavailable";
     public static final String EXTRA_ERROR = "youtube_sync_error";
 
     private static final String YOUTUBE_URL = "https://www.youtube.com/";
@@ -46,9 +53,18 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
     private final Map<String, Channel> channels = new LinkedHashMap<>();
+    private final List<Runnable> browsingDataCleanupCompletions = new ArrayList<>();
     private volatile String capturedPoToken;
     private volatile boolean sessionDetected;
+    private CookieManager cookieManager;
+    private WebStorage webStorage;
+    private boolean dedicatedProfile;
+    private boolean browsingDataReady;
+    private boolean browsingDataCleanupInProgress;
+    private boolean dismissRequested;
     private boolean collectionStarted;
+    private boolean collectionComplete;
+    private boolean authenticatedSnapshot;
     private boolean resultStarted;
     private boolean webViewDestroyed;
     private int stableCollectionRounds;
@@ -66,6 +82,8 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
 
     @Override
     protected void configureWebView() {
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        configureBrowsingProfile();
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
@@ -76,7 +94,6 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
         webSettings.setUserAgentString(
                 "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 "
                         + "(KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36");
-        CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, false);
         handler.postDelayed(this::finishWithError, LOGIN_TIMEOUT_MS);
@@ -93,18 +110,27 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
 
     @Override
     protected void loadLoginUrl() {
-        if (isSyncOnly()) {
-            YouTubeSubscriptionImportHelper.clearYoutubeSessionCookies(
-                    () -> seedStoredCookies(CookieManager.getInstance()));
-        } else {
-            super.loadLoginUrl();
+        if (browsingDataReady) {
+            loadLoginUrlAfterCleanup();
+            return;
         }
+        clearWebViewBrowsingData(() -> runOnUiThread(() -> {
+            if (isUnavailable() || resultStarted || dismissRequested) {
+                return;
+            }
+            browsingDataReady = true;
+            loadLoginUrlAfterCleanup();
+        }));
     }
 
     @Override
     public void onBackPressed() {
-        clearWebViewCookies();
-        super.onBackPressed();
+        if (resultStarted) {
+            return;
+        }
+        dismissRequested = true;
+        handler.removeCallbacksAndMessages(null);
+        clearWebViewBrowsingData(this::cancelLogin);
     }
 
     @Override
@@ -118,11 +144,50 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
             webView.destroy();
             webViewDestroyed = true;
         }
+        deleteBrowsingProfile();
         super.onDestroy();
     }
 
     private boolean isSyncOnly() {
         return getIntent().getBooleanExtra(EXTRA_SYNC_ONLY, false);
+    }
+
+    private void cancelLogin() {
+        super.onBackPressed();
+    }
+
+    private void configureBrowsingProfile() {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+            try {
+                YouTubeSubscriptionImportHelper.deleteYoutubeLoginProfile();
+                WebViewCompat.setProfile(
+                        webView, YouTubeSubscriptionImportHelper.LOGIN_PROFILE_NAME);
+                Profile profile = WebViewCompat.getProfile(webView);
+                cookieManager = profile.getCookieManager();
+                webStorage = profile.getWebStorage();
+                dedicatedProfile = true;
+                return;
+            } catch (RuntimeException ignored) {
+            }
+        }
+        cookieManager = CookieManager.getInstance();
+        webStorage = WebStorage.getInstance();
+        dedicatedProfile = false;
+    }
+
+    private void deleteBrowsingProfile() {
+        if (dedicatedProfile) {
+            YouTubeSubscriptionImportHelper.deleteYoutubeLoginProfile();
+        }
+        dedicatedProfile = false;
+    }
+
+    private void loadLoginUrlAfterCleanup() {
+        if (isSyncOnly()) {
+            seedStoredCookies(cookieManager);
+        } else {
+            super.loadLoginUrl();
+        }
     }
 
     private void seedStoredCookies(CookieManager cookieManager) {
@@ -174,6 +239,7 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
             return;
         }
         collectionStarted = true;
+        collectionComplete = false;
         stableCollectionRounds = 0;
         collectionRounds = 0;
         collectCurrentPage();
@@ -187,6 +253,11 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
             if (resultStarted || isUnavailable()) {
                 return;
             }
+            if (!snapshot.isAuthenticated()) {
+                finishWithError();
+                return;
+            }
+            authenticatedSnapshot = true;
             int previousSize = channels.size();
             for (Channel channel : snapshot.getChannels()) {
                 channels.putIfAbsent(channel.getUrl(), channel);
@@ -194,12 +265,22 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
             boolean noGrowth = channels.size() == previousSize;
             stableCollectionRounds = noGrowth ? stableCollectionRounds + 1 : 0;
             collectionRounds++;
-            boolean atBottom = snapshot.getScrollHeight() <= 0
-                    || snapshot.getScrollY() + snapshot.getViewport()
+            boolean atBottom = snapshot.getScrollHeight() > 0
+                    && snapshot.getViewport() > 0
+                    && snapshot.getScrollY() + snapshot.getViewport()
                     >= snapshot.getScrollHeight() - 32;
-            if (collectionRounds >= MAX_COLLECTION_ROUNDS
-                    || collectionRounds >= MIN_COLLECTION_ROUNDS
+            if (collectionRounds >= MAX_COLLECTION_ROUNDS) {
+                if (atBottom) {
+                    collectionComplete = true;
+                    collectMediaResourcesAndFinish();
+                } else {
+                    finishCollection();
+                }
+                return;
+            }
+            if (collectionRounds >= MIN_COLLECTION_ROUNDS
                     && atBottom && stableCollectionRounds >= 2) {
+                collectionComplete = true;
                 collectMediaResourcesAndFinish();
                 return;
             }
@@ -229,7 +310,7 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
         resultStarted = true;
         handler.removeCallbacksAndMessages(null);
         String cookies = collectWebViewCookies();
-        if (!YouTubeCredentialStore.hasSessionCookie(cookies)) {
+        if (!authenticatedSnapshot || !YouTubeCredentialStore.hasSessionCookie(cookies)) {
             finishWithError();
             return;
         }
@@ -239,7 +320,11 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
             try {
                 YoutubeParsingHelper.getAuthorizationHeader(cookies);
                 YouTubeCredentialStore.saveCredentials(this, cookies, poToken);
-                String path = YouTubeSubscriptionImportHelper.writeCache(this, snapshot);
+                final String path = collectionComplete && !snapshot.isEmpty()
+                        ? YouTubeSubscriptionImportHelper.writeCache(this, snapshot) : null;
+                if (path == null) {
+                    YouTubeSubscriptionImportHelper.clearCache(this);
+                }
                 runOnUiThread(() -> {
                     if (!isUnavailable()) {
                         finishWithSuccess(path);
@@ -256,7 +341,6 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
     }
 
     private String collectWebViewCookies() {
-        CookieManager cookieManager = CookieManager.getInstance();
         Map<String, String> values = new LinkedHashMap<>();
         addCookies(values, cookieManager.getCookie(YOUTUBE_URL));
         StringBuilder result = new StringBuilder();
@@ -284,16 +368,20 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
         }
     }
 
-    private void finishWithSuccess(String path) {
+    private void finishWithSuccess(@Nullable String path) {
         if (isUnavailable()) {
             return;
         }
-        clearWebViewCookies(() -> {
+        clearWebViewBrowsingData(() -> {
             if (isUnavailable()) {
                 return;
             }
             Intent result = new Intent();
-            result.putExtra(EXTRA_SUBSCRIPTIONS_CACHE_PATH, path);
+            if (path == null) {
+                result.putExtra(EXTRA_SUBSCRIPTIONS_UNAVAILABLE, true);
+            } else {
+                result.putExtra(EXTRA_SUBSCRIPTIONS_CACHE_PATH, path);
+            }
             result.putExtra(EXTRA_SYNC_ONLY, isSyncOnly());
             setResult(RESULT_OK, result);
             closeWebView();
@@ -306,7 +394,7 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
         }
         resultStarted = true;
         handler.removeCallbacksAndMessages(null);
-        clearWebViewCookies(() -> {
+        clearWebViewBrowsingData(() -> {
             if (isUnavailable()) {
                 return;
             }
@@ -318,28 +406,43 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
     }
 
     private void closeWebView() {
-        if (webViewDestroyed || webView == null) {
-            finish();
-            return;
+        if (!webViewDestroyed && webView != null) {
+            webView.stopLoading();
+            webView.onPause();
+            webView.removeAllViews();
+            webView.destroy();
+            webViewDestroyed = true;
         }
-        webView.stopLoading();
-        webView.onPause();
-        webView.removeAllViews();
-        webView.destroy();
-        webViewDestroyed = true;
+        deleteBrowsingProfile();
         finish();
     }
 
-    private void clearWebViewCookies() {
-        clearWebViewCookies(null);
+    private void clearWebViewBrowsingData(@Nullable Runnable completion) {
+        runOnUiThread(() -> {
+            if (completion != null) {
+                browsingDataCleanupCompletions.add(completion);
+            }
+            if (browsingDataCleanupInProgress) {
+                return;
+            }
+            if (webViewDestroyed || webView == null || cookieManager == null || webStorage == null) {
+                completeBrowsingDataCleanup();
+                return;
+            }
+            browsingDataCleanupInProgress = true;
+            YouTubeSubscriptionImportHelper.clearYoutubeBrowsingData(
+                    webView, cookieManager, webStorage,
+                    () -> runOnUiThread(this::completeBrowsingDataCleanup));
+        });
     }
 
-    private void clearWebViewCookies(@Nullable Runnable completion) {
-        YouTubeSubscriptionImportHelper.clearYoutubeSessionCookies(() -> runOnUiThread(() -> {
-            if (completion != null) {
-                completion.run();
-            }
-        }));
+    private void completeBrowsingDataCleanup() {
+        browsingDataCleanupInProgress = false;
+        List<Runnable> completions = new ArrayList<>(browsingDataCleanupCompletions);
+        browsingDataCleanupCompletions.clear();
+        for (Runnable completion : completions) {
+            completion.run();
+        }
     }
 
     private boolean isUnavailable() {

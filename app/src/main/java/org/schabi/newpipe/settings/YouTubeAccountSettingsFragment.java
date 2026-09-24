@@ -1,5 +1,6 @@
 package org.schabi.newpipe.settings;
 
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -19,6 +20,7 @@ import org.schabi.newpipe.youtube.YouTubeCredentialStore;
 import org.schabi.newpipe.youtube.YouTubeSubscriptionImportHelper;
 import org.schabi.newpipe.youtube.YouTubeSubscriptionImportHelper.Channel;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +33,7 @@ public class YouTubeAccountSettingsFragment extends BaseAccountSettingsFragment 
     private Preference syncPreference;
     private SubscriptionManager subscriptionManager;
     private boolean syncInProgress;
+    private boolean logoutInProgress;
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -99,24 +102,51 @@ public class YouTubeAccountSettingsFragment extends BaseAccountSettingsFragment 
         }
         String path = data.getStringExtra(
                 YouTubeLoginWebViewActivity.EXTRA_SUBSCRIPTIONS_CACHE_PATH);
+        boolean subscriptionsUnavailable = data.getBooleanExtra(
+                YouTubeLoginWebViewActivity.EXTRA_SUBSCRIPTIONS_UNAVAILABLE, false);
         if (data.getStringExtra(YouTubeLoginWebViewActivity.EXTRA_ERROR) != null
-                || path == null || path.isEmpty()
                 || !YouTubeCredentialStore.hasCredentials(requireContext())) {
             showSyncFailed();
             return;
         }
         LocalDomPoTokenProvider.INSTANCE.invalidate();
+        if (subscriptionsUnavailable || path == null || path.isEmpty()) {
+            refreshAccountDependentState();
+            showSyncFailed();
+            return;
+        }
         onLoginSuccess();
         importSubscriptions(path);
     }
 
     @Override
     protected void performLogout() {
-        YouTubeCredentialStore.clearCredentials(requireContext());
-        YouTubeSubscriptionImportHelper.clearCache(requireContext());
-        YouTubeSubscriptionImportHelper.clearYoutubeSessionCookies();
-        LocalDomPoTokenProvider.INSTANCE.invalidate();
-        onLogoutSuccess();
+        if (logoutInProgress || syncInProgress) {
+            return;
+        }
+        logoutInProgress = true;
+        updateSyncPreference();
+        Context context = requireContext().getApplicationContext();
+        try {
+            YouTubeSubscriptionImportHelper.clearDefaultYoutubeBrowsingData(
+                    context, () -> runOnUiThread(() -> completeLogout(context)));
+        } catch (RuntimeException ignored) {
+            completeLogout(context);
+        }
+    }
+
+    private void completeLogout(Context context) {
+        try {
+            YouTubeSubscriptionImportHelper.deleteYoutubeLoginProfile();
+            YouTubeCredentialStore.clearCredentials(context);
+            YouTubeSubscriptionImportHelper.clearCache(context);
+            LocalDomPoTokenProvider.INSTANCE.invalidate();
+        } finally {
+            logoutInProgress = false;
+            if (isAdded() && getView() != null) {
+                onLogoutSuccess();
+            }
+        }
     }
 
     @Override
@@ -166,7 +196,7 @@ public class YouTubeAccountSettingsFragment extends BaseAccountSettingsFragment 
     }
 
     private void startManualSync() {
-        if (syncInProgress) {
+        if (syncInProgress || logoutInProgress) {
             return;
         }
         if (!YouTubeCredentialStore.hasCredentials(requireContext())) {
@@ -183,13 +213,16 @@ public class YouTubeAccountSettingsFragment extends BaseAccountSettingsFragment 
     private void importSubscriptions(String path) {
         syncInProgress = true;
         updateSyncPreference();
-        final android.content.Context context = requireContext().getApplicationContext();
+        final Context context = requireContext().getApplicationContext();
         disposables.add(io.reactivex.rxjava3.core.Single.fromCallable(() -> {
                     int found;
                     int added;
                     try {
-                        List<Channel> channels = YouTubeSubscriptionImportHelper.readCache(
-                                context, path);
+                        List<Channel> channels = YouTubeSubscriptionImportHelper.resolveStableChannels(
+                                YouTubeSubscriptionImportHelper.readCache(context, path));
+                        if (channels.isEmpty()) {
+                            throw new IOException("No authenticated subscriptions were found");
+                        }
                         found = channels.size();
                         List<SubscriptionItem> items = new ArrayList<>(channels.size());
                         for (Channel channel : channels) {
@@ -240,8 +273,11 @@ public class YouTubeAccountSettingsFragment extends BaseAccountSettingsFragment 
             return;
         }
         boolean loggedIn = YouTubeCredentialStore.hasCredentials(requireContext());
-        syncPreference.setEnabled(loggedIn && !syncInProgress);
-        if (syncInProgress) {
+        boolean accountActionInProgress = syncInProgress || logoutInProgress;
+        syncPreference.setEnabled(loggedIn && !accountActionInProgress);
+        login.setEnabled(!loggedIn && !accountActionInProgress);
+        logout.setEnabled(loggedIn && !accountActionInProgress);
+        if (accountActionInProgress) {
             syncPreference.setSummary(R.string.youtube_subscription_sync_in_progress);
         } else {
             syncPreference.setSummary(loggedIn

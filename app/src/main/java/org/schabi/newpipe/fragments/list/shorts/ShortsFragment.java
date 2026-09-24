@@ -2,6 +2,8 @@ package org.schabi.newpipe.fragments.list.shorts;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
 import android.view.SubMenu;
@@ -21,6 +23,7 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.audio.AudioAttributes;
+import com.google.android.exoplayer2.analytics.PlayerId;
 import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.source.MediaSource;
@@ -73,6 +76,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.Single;
@@ -111,7 +116,7 @@ public class ShortsFragment extends Fragment {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final LruCache<Integer, StreamInfo> infoCache =
             new LruCache<>(MAX_CACHED_STREAM_INFOS);
-    private final Map<Integer, Integer> resolvingPositions = new ConcurrentHashMap<>();
+    private final Map<Integer, ResolveRequest> resolvingPositions = new ConcurrentHashMap<>();
     private final Set<Integer> viewedPositions = Collections.synchronizedSet(new HashSet<>());
     private final Map<Integer, Integer> errorAttempts = new HashMap<>();
     private final Set<String> seenUrls = new HashSet<>();
@@ -125,12 +130,14 @@ public class ShortsFragment extends Fragment {
     private int currentPosition = -1;
     private int playerPosition = -1;
     private int openingToken = -1;
+    private int playbackToken = -1;
     private int sourceIndex;
     private int resolveToken;
     private int feedGeneration;
     private boolean loadingMore;
     private boolean userPaused;
-    private boolean resumeWhenVisible = true;
+    private boolean playRequested;
+    private boolean resumeWhenVisible;
     private boolean resumed;
     private boolean muted;
     private boolean zoom;
@@ -140,6 +147,19 @@ public class ShortsFragment extends Fragment {
     private String selectedResolution;
     private String selectedCodec;
     private Runnable advanceRunnable;
+
+    private static final class ResolveRequest {
+        private final int generation;
+        private final int token;
+        private final boolean force;
+        private boolean openWhenCurrent;
+
+        private ResolveRequest(final int generation, final int token, final boolean force) {
+            this.generation = generation;
+            this.token = token;
+            this.force = force;
+        }
+    }
 
     private final ViewPager2.OnPageChangeCallback pageCallback =
             new ViewPager2.OnPageChangeCallback() {
@@ -202,6 +222,8 @@ public class ShortsFragment extends Fragment {
                     feedPageRetry = false;
                     loadMore();
                 } else {
+                    userPaused = false;
+                    playRequested = true;
                     retryCurrent(true);
                 }
             }
@@ -237,7 +259,7 @@ public class ShortsFragment extends Fragment {
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
                         .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                        .build(), true)
+                        .build(), false)
                 .build();
         audioReactor = new AudioReactor(context, player);
         player.setSeekParameters(PlayerHelper.getSeekParameters(context));
@@ -254,10 +276,35 @@ public class ShortsFragment extends Fragment {
             @Override
             public void onIsPlayingChanged(final boolean isPlaying) {
                 updateTopBar();
+                updateKeepScreenOn();
                 if (isPlaying) {
+                    if (playbackToken == resolveToken) {
+                        recordCurrentView();
+                    }
                     startProgressUpdates();
                 } else {
                     stopProgressUpdates();
+                }
+            }
+
+            @Override
+            public void onPlayWhenReadyChanged(final boolean playWhenReady, final int reason) {
+                if (playWhenReady && (!resumed || !playRequested
+                        || playerPosition != currentPosition || playbackToken != resolveToken)) {
+                    pausePlayback();
+                } else if (!playWhenReady
+                        && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY
+                        && audioReactor != null) {
+                    audioReactor.abandonAudioFocus();
+                }
+                updateTopBar();
+                updateKeepScreenOn();
+            }
+
+            @Override
+            public void onVolumeChanged(final float volume) {
+                if (muted && volume != 0f && player != null) {
+                    player.setVolume(0f);
                 }
             }
 
@@ -317,16 +364,37 @@ public class ShortsFragment extends Fragment {
             return;
         }
         final ShortsPageHolder holder = currentHolder();
-        if (player.isPlaying()) {
-            player.pause();
+        final boolean currentSource = playerPosition == currentPosition
+                && playbackToken == resolveToken;
+        if (!currentSource && playerPosition == currentPosition
+                && player.getPlayerError() != null) {
+            userPaused = false;
+            playRequested = true;
+            retryCurrent(true);
+            return;
+        }
+        final boolean shouldPause = currentSource && player.getPlayWhenReady()
+                && player.getPlaybackState() != Player.STATE_ENDED;
+        if (shouldPause) {
             userPaused = true;
+            playRequested = false;
+            pausePlayback();
             if (holder != null) {
                 holder.showPlayIndicator(false);
             }
         } else {
             userPaused = false;
-            if (resumed && PlayerHelper.isAutoplayAllowedByUser(requireContext())) {
-                audioReactor.requestAudioFocus();
+            playRequested = true;
+            if (!currentSource) {
+                pausePlayback();
+            }
+            if (resumed && currentSource) {
+                if (player.getPlaybackState() == Player.STATE_ENDED) {
+                    player.seekTo(0L);
+                }
+                if (audioReactor != null) {
+                    audioReactor.requestAudioFocus();
+                }
                 player.play();
             }
             if (holder != null) {
@@ -334,6 +402,29 @@ public class ShortsFragment extends Fragment {
             }
         }
         updateTopBar();
+        updateKeepScreenOn();
+    }
+
+    private void pausePlayback() {
+        if (player != null) {
+            player.pause();
+        }
+        if (audioReactor != null) {
+            audioReactor.abandonAudioFocus();
+        }
+    }
+
+    private boolean shouldKeepScreenOn() {
+        return resumed && playRequested && !userPaused && player != null
+                && player.getPlayWhenReady()
+                && player.getPlaybackState() != Player.STATE_ENDED;
+    }
+
+    private void updateKeepScreenOn() {
+        final ShortsPageHolder holder = currentHolder();
+        if (holder != null) {
+            holder.setKeepScreenOn(shouldKeepScreenOn());
+        }
     }
 
     private void toggleMute() {
@@ -367,7 +458,8 @@ public class ShortsFragment extends Fragment {
             return;
         }
         binding.shortsPlayButton.setImageResource(
-                player != null && player.isPlaying()
+                player != null && player.getPlayWhenReady()
+                        && player.getPlaybackState() != Player.STATE_ENDED
                         ? R.drawable.ic_pause : R.drawable.ic_play_arrow);
         binding.shortsMuteButton.setImageResource(
                 muted ? R.drawable.ic_volume_off : R.drawable.ic_volume_up);
@@ -472,7 +564,9 @@ public class ShortsFragment extends Fragment {
     private final Runnable progressUpdater = new Runnable() {
         @Override
         public void run() {
-            if (player != null && binding != null && player.isPlaying()) {
+            if (player != null && binding != null
+                    && playerPosition == currentPosition && playbackToken == resolveToken
+                    && player.isPlaying()) {
                 final ShortsPageHolder holder = currentHolder();
                 if (holder != null && !holder.seeking) {
                     final long duration = player.getDuration();
@@ -501,7 +595,7 @@ public class ShortsFragment extends Fragment {
 
     private void seekCurrent(final int position, final float value,
                              final boolean relative) {
-        if (player == null || position != currentPosition) {
+        if (player == null || position != currentPosition || playerPosition != position) {
             return;
         }
         final long duration = player.getDuration();
@@ -648,12 +742,9 @@ public class ShortsFragment extends Fragment {
 
     private void openAsVideo(final StreamInfoItem item) {
         savePlaybackState();
-        if (player != null) {
-            player.pause();
-        }
-        if (audioReactor != null) {
-            audioReactor.abandonAudioFocus();
-        }
+        userPaused = true;
+        playRequested = false;
+        pausePlayback();
         NavigationHelper.openVideoDetailFragment(requireContext(),
                 getParentFragmentManager(), item.getServiceId(), item.getUrl(),
                 item.getName(), null, false);
@@ -666,15 +757,11 @@ public class ShortsFragment extends Fragment {
         stopProgressUpdates();
         stopAdvanceRunnable();
         savePlaybackState();
-        if (player != null) {
-            if (!resumeWhenVisible) {
-                resumeWhenVisible = player.isPlaying();
-            }
-            player.pause();
+        if (player != null && !resumeWhenVisible) {
+            resumeWhenVisible = player.getPlayWhenReady();
         }
-        if (audioReactor != null) {
-            audioReactor.abandonAudioFocus();
-        }
+        pausePlayback();
+        updateKeepScreenOn();
     }
 
     @Override
@@ -682,26 +769,35 @@ public class ShortsFragment extends Fragment {
         super.onResume();
         resumed = true;
         if (player != null && player.getCurrentMediaItem() != null
-                && !userPaused
-                && PlayerHelper.isAutoplayAllowedByUser(requireContext())) {
+                && playerPosition == currentPosition && playbackToken == resolveToken
+                && !userPaused) {
             if (player.getPlaybackState() == Player.STATE_ENDED && autoAdvance) {
                 advanceAfterEnd();
-            } else if (resumeWhenVisible) {
-                audioReactor.requestAudioFocus();
+            } else if (resumeWhenVisible
+                    || (playRequested && player.getPlaybackState() != Player.STATE_ENDED)) {
+                playRequested = true;
+                if (audioReactor != null) {
+                    audioReactor.requestAudioFocus();
+                }
+                if (player.getPlaybackState() == Player.STATE_ENDED) {
+                    player.seekTo(0L);
+                }
                 player.play();
             }
         }
         resumeWhenVisible = false;
+        updateKeepScreenOn();
     }
 
     @Override
     public void onDestroyView() {
         feedGeneration++;
         resolveToken++;
+        playbackToken = -1;
         stopProgressUpdates();
         stopAdvanceRunnable();
-        savePlaybackState();
         disposables.clear();
+        savePlaybackState();
         if (currentHolder() != null) {
             currentHolder().detachPlayer();
         }
@@ -719,6 +815,10 @@ public class ShortsFragment extends Fragment {
         playerPosition = -1;
         openingToken = -1;
         loadingMore = false;
+        userPaused = false;
+        playRequested = false;
+        resumeWhenVisible = false;
+        resumed = false;
         feedPageRetry = false;
         errorAttempts.clear();
         binding.shortsPager.unregisterOnPageChangeCallback(pageCallback);
@@ -731,6 +831,8 @@ public class ShortsFragment extends Fragment {
         if (binding == null) {
             return;
         }
+        disposables.clear();
+        savePlaybackState();
         final int generation = ++feedGeneration;
         final Context context = requireContext().getApplicationContext();
         binding.shortsLoading.setVisibility(View.VISIBLE);
@@ -744,8 +846,11 @@ public class ShortsFragment extends Fragment {
         currentPosition = -1;
         playerPosition = -1;
         openingToken = -1;
+        playbackToken = -1;
         resolveToken++;
         sourceIndex = 0;
+        userPaused = false;
+        playRequested = false;
         if (player != null) {
             player.stop();
             player.clearMediaItems();
@@ -757,13 +862,21 @@ public class ShortsFragment extends Fragment {
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(sources -> {
-                    if (binding == null || generation != feedGeneration || sources.isEmpty()) {
+                    if (binding == null || generation != feedGeneration) {
+                        return;
+                    }
+                    if (sources.isEmpty()) {
+                        showFeedError();
                         return;
                     }
                     feedModel.setSources(sources);
                     sourceIndex = 0;
                     loadSourceAt(0, generation, true);
-                }, throwable -> showFeedError()));
+                }, throwable -> {
+                    if (binding != null && generation == feedGeneration) {
+                        showFeedError();
+                    }
+                }));
     }
 
     private Single<List<ShortsFeedSource>> buildFeedSources(final Context context) {
@@ -772,9 +885,10 @@ public class ShortsFragment extends Fragment {
             final Set<String> searchKeys = new HashSet<>();
             final List<StreamHistoryEntry> history;
             try {
-                history = new HistoryRecordManager(context)
-                        .getRecentStreamHistory()
-                        .blockingFirst(new ArrayList<>());
+                final HistoryRecordManager manager = new HistoryRecordManager(context);
+                history = manager.isStreamHistoryEnabled()
+                        ? manager.getRecentStreamHistory().blockingFirst(new ArrayList<>())
+                        : new ArrayList<>();
             } catch (final Exception ignored) {
                 return fallbackSources(sources, searchKeys, new ArrayList<>());
             }
@@ -822,14 +936,15 @@ public class ShortsFragment extends Fragment {
                     }
                 }
             }
-            if (sources.size() < 3 || channelCount < 10) {
-                for (final String query : GENERIC_QUERIES) {
-                    if (addSearchSource(sources, searchKeys, query, searchCount)) {
-                        searchCount++;
-                    }
-                    if (sources.size() >= 12 || searchCount >= MAX_SEARCH_SOURCES) {
-                        break;
-                    }
+            int genericSearchCount = 0;
+            for (final String query : GENERIC_QUERIES) {
+                if (addSearchSource(sources, searchKeys, query, searchCount)) {
+                    searchCount++;
+                    genericSearchCount++;
+                }
+                if (genericSearchCount >= 2 || sources.size() >= 12
+                        || searchCount >= MAX_SEARCH_SOURCES) {
+                    break;
                 }
             }
             if (sources.isEmpty()) {
@@ -908,8 +1023,10 @@ public class ShortsFragment extends Fragment {
 
     private void loadSourceAt(final int index, final int generation,
                               final boolean replace) {
-        if (binding == null || generation != feedGeneration
-                || index < 0 || index >= feedModel.getSources().size()) {
+        if (binding == null || generation != feedGeneration) {
+            return;
+        }
+        if (index < 0 || index >= feedModel.getSources().size()) {
             if (replace) {
                 showFeedError();
             }
@@ -926,38 +1043,19 @@ public class ShortsFragment extends Fragment {
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(items -> {
-                    loadingMore = false;
                     if (binding == null || generation != feedGeneration) {
                         return;
                     }
+                    loadingMore = false;
                     binding.shortsLoading.setVisibility(View.GONE);
-                    applySourceMetadata(source, items);
-                    final List<StreamInfoItem> shorts = filterShorts(items);
-                    if (shorts.isEmpty()) {
-                        if (index + 1 < feedModel.getSources().size()) {
-                            loadSourceAt(index + 1, generation, replace);
-                        } else if (replace) {
-                            showFeedError();
-                        }
+                    feedPageRetry = false;
+                    hideCurrentPageError();
+                    handleSourceItems(index, generation, replace, source, items);
+                }, throwable -> {
+                    if (binding == null || generation != feedGeneration) {
                         return;
                     }
-                    if (replace) {
-                        adapter.setItems(shorts);
-                        feedModel.replaceItems(shorts);
-                        currentPosition = -1;
-                        binding.shortsPager.setCurrentItem(0, false);
-                        playPosition(0);
-                    } else {
-                        adapter.addItems(shorts);
-                        feedModel.appendItems(shorts);
-                    }
-                }, throwable -> {
-                    loadingMore = false;
-                    if (index + 1 < feedModel.getSources().size()) {
-                        loadSourceAt(index + 1, generation, replace);
-                    } else if (replace) {
-                        showFeedError();
-                    }
+                    moveToNextSource(index, generation, replace);
                 }));
     }
 
@@ -981,6 +1079,88 @@ public class ShortsFragment extends Fragment {
                     });
         }
         return single;
+    }
+
+    private void handleSourceItems(final int index, final int generation,
+                                   final boolean replace, final ShortsFeedSource source,
+                                   final List<? extends InfoItem> items) {
+        if (binding == null || generation != feedGeneration) {
+            return;
+        }
+        applySourceMetadata(source, items);
+        final List<StreamInfoItem> shorts = filterShorts(items);
+        if (!shorts.isEmpty()) {
+            loadingMore = false;
+            binding.shortsLoading.setVisibility(View.GONE);
+            appendOrReplaceItems(shorts, replace);
+            return;
+        }
+        final Page nextPage = source.getNextPage();
+        if (nextPage != null) {
+            loadingMore = true;
+            if (replace) {
+                binding.shortsLoading.setVisibility(View.VISIBLE);
+            }
+            loadSourceContinuation(index, generation, replace, source, nextPage);
+        } else {
+            moveToNextSource(index, generation, replace);
+        }
+    }
+
+    private void loadSourceContinuation(final int index, final int generation,
+                                        final boolean replace, final ShortsFeedSource source,
+                                        final Page page) {
+        if (binding == null || generation != feedGeneration) {
+            return;
+        }
+        disposables.add(loadMoreSource(source, page)
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(items -> {
+                    if (binding == null || generation != feedGeneration) {
+                        return;
+                    }
+                    handleSourceItems(index, generation, replace, source, items);
+                }, throwable -> {
+                    if (binding == null || generation != feedGeneration) {
+                        return;
+                    }
+                    moveToNextSource(index, generation, replace);
+                }));
+    }
+
+    private void appendOrReplaceItems(final List<StreamInfoItem> shorts,
+                                      final boolean replace) {
+        if (binding == null || shorts.isEmpty()) {
+            return;
+        }
+        if (replace || adapter.getItemCount() == 0) {
+            adapter.setItems(shorts);
+            feedModel.replaceItems(shorts);
+            currentPosition = -1;
+            binding.shortsPager.setCurrentItem(0, false);
+            playPosition(0);
+        } else {
+            adapter.addItems(shorts);
+            feedModel.appendItems(shorts);
+        }
+    }
+
+    private void moveToNextSource(final int index, final int generation,
+                                  final boolean replace) {
+        if (binding == null || generation != feedGeneration) {
+            return;
+        }
+        if (index + 1 < feedModel.getSources().size()) {
+            loadingMore = true;
+            loadSourceAt(index + 1, generation,
+                    replace || adapter.getItemCount() == 0);
+        } else {
+            loadingMore = false;
+            if (adapter.getItemCount() == 0) {
+                showFeedError();
+            }
+        }
     }
 
     private void loadMore() {
@@ -1008,10 +1188,12 @@ public class ShortsFragment extends Fragment {
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(items -> {
-                    loadingMore = false;
                     if (binding == null || generation != feedGeneration) {
                         return;
                     }
+                    loadingMore = false;
+                    feedPageRetry = false;
+                    hideCurrentPageError();
                     applySourceMetadata(source, items);
                     final List<StreamInfoItem> shorts = filterShorts(items);
                     if (!shorts.isEmpty()) {
@@ -1024,6 +1206,9 @@ public class ShortsFragment extends Fragment {
                         loadMore();
                     }
                 }, throwable -> {
+                    if (binding == null || generation != feedGeneration) {
+                        return;
+                    }
                     loadingMore = false;
                     if (isValidPosition(currentPosition)) {
                         feedPageRetry = true;
@@ -1055,12 +1240,7 @@ public class ShortsFragment extends Fragment {
         if (loadingMore) {
             return;
         }
-        if (sourceIndex + 1 >= feedModel.getSources().size()) {
-            loadingMore = false;
-            return;
-        }
-        loadingMore = true;
-        loadSourceAt(sourceIndex + 1, feedGeneration, false);
+        moveToNextSource(sourceIndex, feedGeneration, false);
     }
 
     private void applySourceMetadata(final ShortsFeedSource source,
@@ -1182,15 +1362,14 @@ public class ShortsFragment extends Fragment {
     }
 
     private void playPosition(final int position) {
-        if (position == currentPosition) {
+        if (binding == null || player == null || position == currentPosition) {
             return;
         }
         stopAdvanceRunnable();
+        playbackToken = -1;
         if (currentPosition >= 0) {
             savePlaybackState();
-            if (player != null) {
-                player.pause();
-            }
+            pausePlayback();
             final ShortsPageHolder previous = holderAt(currentPosition);
             if (previous != null) {
                 previous.detachPlayer();
@@ -1198,6 +1377,11 @@ public class ShortsFragment extends Fragment {
         }
         playerPosition = -1;
         feedPageRetry = false;
+        userPaused = false;
+        final Context pageContext = getContext();
+        playRequested = pageContext != null
+                && PlayerHelper.isAutoplayAllowedByUser(pageContext);
+        resumeWhenVisible = false;
         currentPosition = position;
         feedModel.setPosition(position);
         resolveToken++;
@@ -1217,27 +1401,26 @@ public class ShortsFragment extends Fragment {
         resolvePosition(position, false, true);
         resolveAhead(position + 1);
         resolveAhead(position + 2);
-        scheduleOpenResolvedPosition(position, 0);
+        scheduleOpenResolvedPosition(position, 0, resolveToken, feedGeneration);
     }
 
-    private void scheduleOpenResolvedPosition(final int position, final int attempt) {
-        if (binding == null || attempt > 4) {
+    private void scheduleOpenResolvedPosition(final int position, final int attempt,
+                                               final int token, final int generation) {
+        if (binding == null || attempt > 4 || token != resolveToken
+                || generation != feedGeneration) {
             return;
         }
         binding.shortsPager.postDelayed(() -> {
-            if (binding == null || position != currentPosition
-                    || !isValidPosition(position)) {
+            if (binding == null || token != resolveToken || generation != feedGeneration
+                    || position != currentPosition || !isValidPosition(position)) {
                 return;
             }
             final StreamInfo info = infoCache.get(position);
             if (info != null) {
                 applyZoomMode();
-                openStream(position, resolveToken, info);
+                openStream(position, token, info, attempt + 1);
             }
-            if (info != null && openingToken != resolveToken) {
-                scheduleOpenResolvedPosition(position, attempt + 1);
-            }
-        }, attempt * 200L);
+        }, Math.max(0L, attempt * 200L));
     }
 
     private void resolvePosition(final int position, final boolean force,
@@ -1256,30 +1439,46 @@ public class ShortsFragment extends Fragment {
         } else {
             infoCache.remove(position);
         }
-        final int requestToken = resolveToken;
-        final int requestGeneration = feedGeneration;
-        if (resolvingPositions.putIfAbsent(position, requestGeneration) != null) {
-            return;
+        final ResolveRequest request = new ResolveRequest(feedGeneration, resolveToken, force);
+        final ResolveRequest existing = resolvingPositions.putIfAbsent(position, request);
+        if (existing != null) {
+            if (!force) {
+                if (openIfCurrent || position == currentPosition) {
+                    existing.openWhenCurrent = true;
+                }
+                return;
+            }
+            if (!resolvingPositions.remove(position, existing)
+                    || resolvingPositions.putIfAbsent(position, request) != null) {
+                return;
+            }
         }
         final String url = adapter.getItem(position).getUrl();
+        if (url == null || url.isEmpty()) {
+            resolvingPositions.remove(position, request);
+            return;
+        }
         disposables.add(ExtractorHelper
                 .getStreamInfo(ServiceList.YouTube.getServiceId(), url, force)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .doFinally(() -> resolvingPositions.remove(position, requestGeneration))
+                .doFinally(() -> resolvingPositions.remove(position, request))
                 .subscribe(info -> {
-                    if (requestGeneration == feedGeneration) {
+                    final boolean active = resolvingPositions.get(position) == request;
+                    final boolean currentToken = !request.force || request.token == resolveToken;
+                    if (active && currentToken && request.generation == feedGeneration) {
                         infoCache.put(position, info);
                     }
-                    if (openIfCurrent && requestGeneration == feedGeneration
+                    if (active && currentToken && request.generation == feedGeneration
                             && position == currentPosition && player != null
-                            && (!force || requestToken == resolveToken)) {
+                            && (request.openWhenCurrent || openIfCurrent)) {
                         openStream(position, resolveToken, info);
                     }
                 }, throwable -> {
-                    if (openIfCurrent && requestToken == resolveToken
-                            && requestGeneration == feedGeneration
-                            && position == currentPosition) {
+                    if (resolvingPositions.get(position) == request
+                            && request.generation == feedGeneration
+                            && position == currentPosition
+                            && (!request.force || request.token == resolveToken)) {
                         showCurrentPageError(R.string.shorts_playback_error);
                     }
                 }));
@@ -1292,12 +1491,21 @@ public class ShortsFragment extends Fragment {
     }
 
     private void openStream(final int position, final int token, final StreamInfo info) {
+        openStream(position, token, info, 0);
+    }
+
+    private void openStream(final int position, final int token, final StreamInfo info,
+                            final int attempt) {
         if (player == null || binding == null || info == null
                 || token != resolveToken || position != currentPosition) {
             return;
         }
         final ShortsPageHolder holder = holderAt(position);
-        if (holder == null || openingToken == token) {
+        if (holder == null) {
+            scheduleOpenResolvedPosition(position, attempt + 1, token, feedGeneration);
+            return;
+        }
+        if (openingToken == token) {
             return;
         }
         openingToken = token;
@@ -1305,35 +1513,76 @@ public class ShortsFragment extends Fragment {
         holder.hideError();
         holder.thumbnail.setVisibility(View.VISIBLE);
         final long initialPosition = initialPositionFor(position, info);
+        final Looper playbackLooper = player.getPlaybackLooper();
+        final AtomicReference<MediaSource> pendingSource = new AtomicReference<>();
+        final AtomicBoolean sourceAttached = new AtomicBoolean();
         disposables.add(Single.fromCallable(() -> {
+                    final MediaSource source;
                     synchronized (videoResolver) {
-                        return videoResolver.resolve(info, initialPosition);
+                        source = videoResolver.resolve(info, initialPosition);
                     }
+                    pendingSource.set(source);
+                    return source;
                 })
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
+                .doFinally(() -> {
+                    if (!sourceAttached.get()) {
+                        releaseUnattachedMediaSource(playbackLooper,
+                                pendingSource.getAndSet(null));
+                    }
+                })
                 .subscribe(mediaSource -> {
-                    if (player == null || binding == null
-                            || token != resolveToken || position != currentPosition) {
+                    if (mediaSource == null) {
+                        if (token == resolveToken && position == currentPosition
+                                && player != null && binding != null) {
+                            showCurrentPageError(R.string.shorts_playback_error);
+                        }
                         return;
                     }
-                    if (mediaSource == null) {
-                        showCurrentPageError(R.string.shorts_playback_error);
+                    final ShortsPageHolder activeHolder = holderAt(position);
+                    if (player == null || binding == null || activeHolder == null
+                            || token != resolveToken || position != currentPosition) {
+                        if (token == resolveToken) {
+                            openingToken = -1;
+                            if (player != null && binding != null && activeHolder == null) {
+                                scheduleOpenResolvedPosition(position, 0, token, feedGeneration);
+                            }
+                        }
+                        if (pendingSource.compareAndSet(mediaSource, null)) {
+                            releaseUnattachedMediaSource(playbackLooper, mediaSource);
+                        }
                         return;
                     }
                     playerPosition = position;
-                    fillChannelRow(holder, position, info);
-                    holder.attachPlayer(player);
-                    player.setMediaSource(mediaSource);
-                    player.prepare();
+                    playbackToken = token;
+                    fillChannelRow(activeHolder, position, info);
+                    activeHolder.attachPlayer(player, shouldKeepScreenOn());
+                    try {
+                        player.setMediaSource(mediaSource, initialPosition);
+                        sourceAttached.set(true);
+                        pendingSource.set(null);
+                        player.prepare();
+                    } catch (final RuntimeException error) {
+                        if (sourceAttached.get() && player != null) {
+                            playbackToken = -1;
+                            player.stop();
+                            player.clearMediaItems();
+                        }
+                        showCurrentPageError(R.string.shorts_playback_error);
+                        return;
+                    }
                     player.setVolume(muted ? 0f : 1f);
-                    if (resumed && !userPaused
-                            && PlayerHelper.isAutoplayAllowedByUser(requireContext())) {
-                        audioReactor.requestAudioFocus();
+                    if (resumed && !userPaused && playRequested) {
+                        if (audioReactor != null) {
+                            audioReactor.requestAudioFocus();
+                        }
                         player.play();
                     } else {
-                        player.pause();
+                        pausePlayback();
                     }
+                    updateTopBar();
+                    updateKeepScreenOn();
                     resolveAhead(position + 1);
                     resolveAhead(position + 2);
                 }, throwable -> {
@@ -1343,9 +1592,35 @@ public class ShortsFragment extends Fragment {
                 }));
     }
 
+    private void releaseUnattachedMediaSource(@Nullable final Looper playbackLooper,
+                                               @Nullable final MediaSource mediaSource) {
+        if (mediaSource == null) {
+            return;
+        }
+        final Looper looper = playbackLooper == null
+                ? Looper.getMainLooper() : playbackLooper;
+        new Handler(looper).post(() -> {
+            final MediaSource.MediaSourceCaller caller = (source, timeline) -> { };
+            try {
+                mediaSource.prepareSource(caller, null, PlayerId.UNSET);
+            } catch (final RuntimeException ignored) {
+            }
+            try {
+                mediaSource.releaseSource(caller);
+            } catch (final RuntimeException ignored) {
+            }
+        });
+    }
+
     private long initialPositionFor(final int position, final StreamInfo info) {
+        if (historyManager != null && !historyManager.isStreamHistoryEnabled()) {
+            return 0L;
+        }
         long positionMillis = feedModel.getPlaybackPosition(position);
-        if (info.getDuration() > 0 && positionMillis >= info.getDuration() - 2_000L) {
+        final long durationSeconds = Math.max(0L, info.getDuration());
+        final long durationMillis = durationSeconds > Long.MAX_VALUE / 1_000L
+                ? Long.MAX_VALUE : durationSeconds * 1_000L;
+        if (durationMillis > 0L && positionMillis >= Math.max(0L, durationMillis - 2_000L)) {
             positionMillis = 0L;
         }
         return Math.max(0L, positionMillis);
@@ -1358,6 +1633,10 @@ public class ShortsFragment extends Fragment {
             }
             return;
         }
+        savePlaybackState();
+        playbackToken = -1;
+        pausePlayback();
+        updateKeepScreenOn();
         resolveToken++;
         feedPageRetry = false;
         final ShortsPageHolder holder = currentHolder();
@@ -1370,7 +1649,8 @@ public class ShortsFragment extends Fragment {
     }
 
     private void handlePlayerError() {
-        if (!isValidPosition(currentPosition)) {
+        if (!isValidPosition(currentPosition) || player == null
+                || playerPosition != currentPosition || playbackToken != resolveToken) {
             return;
         }
         final int attempts = errorAttempts.getOrDefault(currentPosition, 0);
@@ -1378,7 +1658,18 @@ public class ShortsFragment extends Fragment {
             errorAttempts.put(currentPosition, 1);
             retryCurrent(true);
         } else {
+            userPaused = true;
+            playRequested = false;
+            playbackToken = -1;
+            pausePlayback();
             showCurrentPageError(R.string.shorts_playback_error);
+        }
+    }
+
+    private void hideCurrentPageError() {
+        final ShortsPageHolder holder = currentHolder();
+        if (holder != null) {
+            holder.hideError();
         }
     }
 
@@ -1394,11 +1685,16 @@ public class ShortsFragment extends Fragment {
             return;
         }
         loadingMore = false;
+        feedPageRetry = false;
         binding.shortsLoading.setVisibility(View.GONE);
         binding.shortsErrorBox.setVisibility(View.VISIBLE);
     }
 
     private void onPlayerStateChanged(final int state) {
+        updateKeepScreenOn();
+        if (playerPosition != currentPosition || playbackToken != resolveToken) {
+            return;
+        }
         final ShortsPageHolder holder = currentHolder();
         if (state == Player.STATE_READY) {
             if (holder != null) {
@@ -1407,18 +1703,29 @@ public class ShortsFragment extends Fragment {
                 holder.hideError();
             }
             errorAttempts.remove(currentPosition);
-            recordCurrentView();
+            if (resumed && playRequested && !userPaused && player.isPlaying()) {
+                recordCurrentView();
+            }
         } else if (state == Player.STATE_BUFFERING && holder != null) {
             holder.loading.setVisibility(View.VISIBLE);
-        } else if (state == Player.STATE_ENDED && autoAdvance
-                && playerPosition == currentPosition) {
-            advanceAfterEnd();
+        } else if (state == Player.STATE_ENDED) {
+            if (audioReactor != null) {
+                audioReactor.abandonAudioFocus();
+            }
+            if (autoAdvance) {
+                advanceAfterEnd();
+            }
         }
     }
 
     private void advanceAfterEnd() {
         stopAdvanceRunnable();
+        if (binding == null || adapter == null) {
+            return;
+        }
         final int endedPosition = currentPosition;
+        final int generation = feedGeneration;
+        final int token = resolveToken;
         if (endedPosition + 1 < adapter.getItemCount()) {
             binding.shortsPager.setCurrentItem(endedPosition + 1, true);
             return;
@@ -1426,7 +1733,8 @@ public class ShortsFragment extends Fragment {
         advanceRunnable = new Runnable() {
             @Override
             public void run() {
-                if (binding == null || endedPosition != currentPosition) {
+                if (binding == null || endedPosition != currentPosition
+                        || generation != feedGeneration || token != resolveToken) {
                     return;
                 }
                 if (endedPosition + 1 < adapter.getItemCount()) {
@@ -1454,15 +1762,17 @@ public class ShortsFragment extends Fragment {
     }
 
     private void recordCurrentView() {
-        if (playerPosition != currentPosition
-                || !isValidPosition(playerPosition)
-                || !viewedPositions.add(playerPosition)) {
+        if (!resumed || !playRequested || userPaused
+                || playerPosition != currentPosition || !isValidPosition(playerPosition)) {
             return;
         }
         final StreamInfo info = streamInfoAt(playerPosition);
-        if (info != null) {
-            historyManager.onViewed(info).onErrorComplete().subscribe();
+        if (info == null || historyManager == null || !viewedPositions.add(playerPosition)) {
+            return;
         }
+        disposables.add(historyManager.onViewed(info)
+                .onErrorComplete()
+                .subscribe(ignored -> { }, ignored -> { }));
     }
 
     private void savePlaybackState() {
@@ -1475,7 +1785,11 @@ public class ShortsFragment extends Fragment {
         }
         final long positionMillis = Math.max(0L, player.getCurrentPosition());
         feedModel.setPlaybackPosition(playerPosition, positionMillis);
-        historyManager.saveStreamState(info, positionMillis).subscribe();
+        if (historyManager != null) {
+            disposables.add(historyManager.saveStreamState(info, positionMillis)
+                    .onErrorComplete()
+                    .subscribe(() -> { }, ignored -> { }));
+        }
     }
 
     private void fillChannelRow(final ShortsPageHolder holder, final int position,

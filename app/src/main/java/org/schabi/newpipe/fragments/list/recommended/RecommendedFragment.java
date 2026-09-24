@@ -312,6 +312,7 @@ public class RecommendedFragment extends Fragment {
                 || watchedUrls.contains(item.getUrl())
                 || item.isShortFormContent()
                 || item.getUrl().contains("/shorts/")
+                || item.requiresMembership()
                 || !isAllowedRecommendation(item.getStreamType(), item.getDuration())
                 || ContentFilter.isPoliticsBlocked(
                 item.getName(), item.getUploaderName())) {

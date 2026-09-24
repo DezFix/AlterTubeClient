@@ -61,6 +61,8 @@ import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class HistoryRecordManager {
+    private static final int DEFAULT_RECENT_HISTORY_LIMIT = 100;
+
     private final AppDatabase database;
     private final StreamDAO streamTable;
     private final StreamHistoryDAO streamHistoryTable;
@@ -185,7 +187,12 @@ public class HistoryRecordManager {
     }
 
     public Flowable<List<StreamHistoryEntry>> getRecentStreamHistory() {
-        return streamHistoryTable.getRecentHistory().subscribeOn(Schedulers.io());
+        return getRecentStreamHistory(DEFAULT_RECENT_HISTORY_LIMIT);
+    }
+
+    public Flowable<List<StreamHistoryEntry>> getRecentStreamHistory(final int limit) {
+        return streamHistoryTable.getRecentHistory(Math.max(1, limit))
+                .subscribeOn(Schedulers.io());
     }
 
     public Flowable<List<StreamStatisticsEntry>> getStreamStatistics() {
@@ -210,7 +217,7 @@ public class HistoryRecordManager {
                 .subscribeOn(Schedulers.io());
     }
 
-    private boolean isStreamHistoryEnabled() {
+    public boolean isStreamHistoryEnabled() {
         return sharedPreferences.getBoolean(streamHistoryKey, true);
     }
 
@@ -291,6 +298,9 @@ public class HistoryRecordManager {
     }
 
     public Completable saveStreamState(@NonNull final StreamInfo info, final long progressMillis) {
+        if (!isStreamHistoryEnabled()) {
+            return Completable.complete();
+        }
         return Completable.fromAction(() -> database.runInTransaction(() -> {
             final long streamId = streamTable.upsert(new StreamEntity(info));
             final StreamStateEntity state = new StreamStateEntity(streamId, progressMillis);

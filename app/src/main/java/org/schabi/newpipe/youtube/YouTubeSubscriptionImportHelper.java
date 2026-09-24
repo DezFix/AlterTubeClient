@@ -2,16 +2,22 @@ package org.schabi.newpipe.youtube;
 
 import android.content.Context;
 import android.net.Uri;
-import androidx.annotation.Nullable;
-
+import android.os.Handler;
+import android.os.Looper;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
+import android.webkit.WebStorage;
 import android.webkit.WebView;
+
+import androidx.annotation.Nullable;
+import androidx.webkit.ProfileStore;
+import androidx.webkit.WebViewFeature;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
+import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -31,20 +37,18 @@ import java.util.Map;
 
 public final class YouTubeSubscriptionImportHelper {
     public static final String CACHE_FILE_NAME = "youtube_subscription_import.json";
+    public static final String LOGIN_PROFILE_NAME = "youtube_account_login";
     private static final String YOUTUBE_ORIGIN = "https://www.youtube.com";
     private static final String MEDIA_HOST_SUFFIX = ".googlevideo.com";
-    private static final List<String> YOUTUBE_SESSION_COOKIES = List.of(
-            "SID", "HSID", "SSID", "APISID", "SAPISID", "NID", "SIDCC",
-            "LOGIN_INFO", "ACCOUNT_CHOOSER",
-            "__Secure-1PSID", "__Secure-3PSID", "__Secure-1PAPISID",
-            "__Secure-3PAPISID", "__Secure-1PSIDCC", "__Secure-3PSIDCC",
-            "__Secure-1PSIDTS", "__Secure-3PSIDTS", "__Secure-1PAPISIDTS",
-            "__Secure-3PAPISIDTS"
-    );
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     private static final String COLLECTION_SCRIPT =
             "(function(){var roots=document.querySelectorAll('ytd-rich-item-renderer,"
                     + "ytd-grid-video-renderer,ytd-video-renderer');"
+                    + "var avatar=document.querySelector('#avatar-btn,"
+                    + "ytd-topbar-menu-button-renderer #avatar-btn');"
+                    + "var authenticated=!!(avatar&&avatar.getClientRects().length>0)&&"
+                    + "!document.querySelector('a[href*=\"ServiceLogin\"]');"
                     + "var anchors=[];var i;for(i=0;i<roots.length;i++){"
                     + "var nested=roots[i].querySelectorAll('a[href]');for(var j=0;j<nested.length;j++){"
                     + "anchors.push(nested[j]);}}"
@@ -60,7 +64,7 @@ public final class YouTubeSubscriptionImportHelper {
                     + "parent.querySelector){var n=parent.querySelector('ytd-channel-name a,#channel-name a,"
                     + ".ytd-channel-name');if(n&&n.textContent){name=n.textContent;break;}}parent=parent.parentElement;}"
                     + "if(!name){name=(a.textContent||'').trim();}channels.push({url:u.origin+u.pathname,name:name});}"
-                    + "return JSON.stringify({channels:channels,scrollHeight:Math.max("
+                    + "return JSON.stringify({channels:channels,authenticated:authenticated,scrollHeight:Math.max("
                     + "document.body?document.body.scrollHeight:0,document.documentElement?document.documentElement.scrollHeight:0),"
                     + "scrollY:window.pageYOffset||document.documentElement.scrollTop||0,viewport:window.innerHeight||0});})()";
 
@@ -160,45 +164,68 @@ public final class YouTubeSubscriptionImportHelper {
         getCacheFile(context).delete();
     }
 
-    public static void clearYoutubeSessionCookies() {
-        clearYoutubeSessionCookies(null);
+    public static List<Channel> resolveStableChannels(List<Channel> channels) throws IOException {
+        Map<String, Channel> resolvedChannels = new LinkedHashMap<>();
+        for (Channel channel : channels) {
+            Uri uri = Uri.parse(channel.getUrl());
+            String path = uri.getPath();
+            if (path == null || path.startsWith("/")) {
+                path = path == null ? "" : path.substring(1);
+            }
+            final String channelId;
+            try {
+                channelId = YoutubeParsingHelper.resolveChannelId(path);
+            } catch (Exception e) {
+                throw new IOException("Stable channel ID resolution failed", e);
+            }
+            if (!isCanonicalChannelId(channelId)) {
+                throw new IOException("Stable channel ID resolution returned an invalid ID");
+            }
+            String stableUrl = YOUTUBE_ORIGIN + "/channel/" + channelId;
+            resolvedChannels.putIfAbsent(stableUrl, new Channel(stableUrl, channel.getName()));
+        }
+        return new ArrayList<>(resolvedChannels.values());
     }
 
-    public static void clearYoutubeSessionCookies(@Nullable Runnable completion) {
-        CookieManager cookieManager = CookieManager.getInstance();
-        java.util.concurrent.atomic.AtomicInteger remaining =
-                new java.util.concurrent.atomic.AtomicInteger(
-                        YOUTUBE_SESSION_COOKIES.size() * 7);
-        for (String name : YOUTUBE_SESSION_COOKIES) {
-            String expired = name + "=; Max-Age=0; Path=/; Secure; SameSite=None";
-            setExpiredCookie(cookieManager, YOUTUBE_ORIGIN,
-                    expired, remaining, completion);
-            setExpiredCookie(cookieManager, "https://youtube.com",
-                    expired, remaining, completion);
-            setExpiredCookie(cookieManager, "https://m.youtube.com",
-                    expired, remaining, completion);
-            setExpiredCookie(cookieManager, "https://music.youtube.com",
-                    expired, remaining, completion);
-            setExpiredCookie(cookieManager, YOUTUBE_ORIGIN,
-                    expired + "; Domain=.youtube.com", remaining, completion);
-            setExpiredCookie(cookieManager, "https://accounts.google.com",
-                    expired + "; Domain=.google.com", remaining, completion);
-            setExpiredCookie(cookieManager, "https://accounts.google.com",
-                    expired, remaining, completion);
+    public static void clearDefaultYoutubeBrowsingData(Context context,
+                                                      @Nullable Runnable completion) {
+        WebView webView = new WebView(context.getApplicationContext());
+        clearYoutubeBrowsingData(webView, CookieManager.getInstance(),
+                WebStorage.getInstance(), () -> MAIN_HANDLER.post(() -> {
+                    webView.clearHistory();
+                    webView.removeAllViews();
+                    webView.destroy();
+                    if (completion != null) {
+                        completion.run();
+                    }
+                }));
+    }
+
+    public static void deleteYoutubeLoginProfile() {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+            try {
+                ProfileStore.getInstance().deleteProfile(LOGIN_PROFILE_NAME);
+            } catch (RuntimeException ignored) {
+            }
         }
     }
 
-    private static void setExpiredCookie(CookieManager cookieManager,
-                                         String url,
-                                         String value,
-                                         java.util.concurrent.atomic.AtomicInteger remaining,
-                                         @Nullable Runnable completion) {
-        cookieManager.setCookie(url, value, saved -> {
-            if (remaining.decrementAndGet() == 0) {
-                cookieManager.flush();
-                if (completion != null) {
-                    completion.run();
-                }
+    public static void clearYoutubeBrowsingData(WebView webView,
+                                                CookieManager cookieManager,
+                                                WebStorage webStorage,
+                                                @Nullable Runnable completion) {
+        webView.clearCache(true);
+        webView.clearFormData();
+        webStorage.deleteAllData();
+        clearCookies(cookieManager, completion);
+    }
+
+    private static void clearCookies(CookieManager cookieManager,
+                                     @Nullable Runnable completion) {
+        cookieManager.removeAllCookies(value -> {
+            cookieManager.flush();
+            if (completion != null) {
+                completion.run();
             }
         });
     }
@@ -320,16 +347,23 @@ public final class YouTubeSubscriptionImportHelper {
     }
 
     public static final class Snapshot {
+        private final boolean authenticated;
         private final List<Channel> channels;
         private final int scrollHeight;
         private final int scrollY;
         private final int viewport;
 
-        private Snapshot(List<Channel> channels, int scrollHeight, int scrollY, int viewport) {
+        private Snapshot(boolean authenticated, List<Channel> channels,
+                         int scrollHeight, int scrollY, int viewport) {
+            this.authenticated = authenticated;
             this.channels = channels;
             this.scrollHeight = scrollHeight;
             this.scrollY = scrollY;
             this.viewport = viewport;
+        }
+
+        public boolean isAuthenticated() {
+            return authenticated;
         }
 
         public List<Channel> getChannels() {
@@ -358,7 +392,7 @@ public final class YouTubeSubscriptionImportHelper {
             } else if (decoded instanceof JSONObject) {
                 object = (JSONObject) decoded;
             } else {
-                return new Snapshot(Collections.emptyList(), 0, 0, 0);
+                return new Snapshot(false, Collections.emptyList(), 0, 0, 0);
             }
             JSONArray array = object.optJSONArray("channels");
             List<Channel> channels = new ArrayList<>();
@@ -375,12 +409,12 @@ public final class YouTubeSubscriptionImportHelper {
                     }
                 }
             }
-            return new Snapshot(deduplicate(channels),
+            return new Snapshot(object.optBoolean("authenticated", false), deduplicate(channels),
                     object.optInt("scrollHeight", 0),
                     object.optInt("scrollY", 0),
                     object.optInt("viewport", 0));
         } catch (Exception ignored) {
-            return new Snapshot(Collections.emptyList(), 0, 0, 0);
+            return new Snapshot(false, Collections.emptyList(), 0, 0, 0);
         }
     }
 
@@ -440,6 +474,22 @@ public final class YouTubeSubscriptionImportHelper {
                 || normalized.equals("www.youtube.com")
                 || normalized.equals("m.youtube.com")
                 || normalized.equals("music.youtube.com");
+    }
+
+    private static boolean isCanonicalChannelId(String channelId) {
+        if (channelId == null || channelId.length() != 24 || !channelId.startsWith("UC")) {
+            return false;
+        }
+        for (int i = 2; i < channelId.length(); i++) {
+            char character = channelId.charAt(i);
+            if (!((character >= 'A' && character <= 'Z')
+                    || (character >= 'a' && character <= 'z')
+                    || (character >= '0' && character <= '9')
+                    || character == '-' || character == '_')) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean isChannelPath(String path) {

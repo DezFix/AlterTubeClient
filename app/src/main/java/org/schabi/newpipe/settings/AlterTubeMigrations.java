@@ -7,6 +7,7 @@ import android.content.res.Configuration;
 import androidx.preference.PreferenceManager;
 
 import org.schabi.newpipe.R;
+import org.schabi.newpipe.youtube.YouTubeCredentialStore;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,10 +30,7 @@ public final class AlterTubeMigrations {
     public static final Migration MIGRATION_1_2 = new Migration(1, 2) {
         @Override
         protected void migrate(final Context context, final SharedPreferences preferences) {
-            preferences.edit()
-                    .remove(context.getString(R.string.youtube_cookies_key))
-                    .remove(context.getString(R.string.youtube_po_token_key))
-                    .apply();
+            YouTubeCredentialStore.clearCredentials(context);
         }
     };
 

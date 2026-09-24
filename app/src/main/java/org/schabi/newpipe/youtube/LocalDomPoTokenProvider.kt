@@ -11,11 +11,14 @@ import org.schabi.newpipe.extractor.services.youtube.YoutubePoTokenResult
 import org.schabi.newpipe.extractor.services.youtube.sabr.exception.SabrProtocolException
 import java.io.Closeable
 import java.util.Base64
+import java.util.concurrent.Callable
+import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 object LocalDomPoTokenProvider {
@@ -25,7 +28,7 @@ object LocalDomPoTokenProvider {
     }
     private val initializationLock = Any()
     @Volatile
-    private var initializationTask: FutureTask<MintState>? = null
+    private var initializationTask: InitializationTask? = null
 
     fun warmUp() {
         ensureInitializationTask()
@@ -50,16 +53,16 @@ object LocalDomPoTokenProvider {
     fun invalidate() {
         var sessionToClose: PersistentMintSession? = null
         synchronized(initializationLock) {
-            val task = initializationTask ?: return
-            if (!task.isDone || task.isCancelled) {
-                task.cancel(true)
-                initializationTask = null
-            } else {
-                try {
-                    sessionToClose = task.get().session
-                } catch (_: Exception) {
+            val task = initializationTask
+            initializationTask = null
+            if (task != null) {
+                task.invalidated = true
+                if (task.isDone && !task.isCancelled) {
+                    try {
+                        sessionToClose = task.get().session
+                    } catch (_: Exception) {
+                    }
                 }
-                initializationTask = null
             }
         }
         sessionToClose?.close()
@@ -75,7 +78,15 @@ object LocalDomPoTokenProvider {
             } catch (error: InterruptedException) {
                 Thread.currentThread().interrupt()
                 throw SabrProtocolException("Global PO token initialization interrupted", error)
+            } catch (error: CancellationException) {
+                if (task.invalidated || initializationTask !== task) {
+                    continue
+                }
+                throw SabrProtocolException("Global PO token initialization cancelled", error)
             } catch (error: ExecutionException) {
+                if (task.invalidated || initializationTask !== task) {
+                    continue
+                }
                 synchronized(initializationLock) {
                     if (initializationTask === task) {
                         initializationTask = null
@@ -87,23 +98,27 @@ object LocalDomPoTokenProvider {
                     cause,
                 )
             }
+            if (task.invalidated || initializationTask !== task) {
+                state.session.close()
+                continue
+            }
             if (!state.session.isExpired()) {
                 return state
             }
+            state.session.close()
             synchronized(initializationLock) {
                 if (initializationTask === task) {
                     initializationTask = null
-                    state.session.close()
                 }
             }
         }
     }
 
-    private fun ensureInitializationTask(): FutureTask<MintState> {
+    private fun ensureInitializationTask(): InitializationTask {
         initializationTask?.let { return it }
         synchronized(initializationLock) {
             initializationTask?.let { return it }
-            val task = FutureTask {
+            val task = InitializationTask {
                 val storedCookies = YouTubeCredentialStore.getCookies(appContext)
                 val loginCookies = storedCookies?.takeIf {
                     YouTubeCredentialStore.hasSessionCookie(it)
@@ -175,6 +190,20 @@ object LocalDomPoTokenProvider {
         val sessionPoToken: ByteArray?,
     )
 
+    private class InitializationTask(factory: Callable<MintState>) : FutureTask<MintState>(factory) {
+        @Volatile
+        var invalidated: Boolean = false
+
+        override fun done() {
+            if (invalidated && isDone && !isCancelled) {
+                try {
+                    get().session.close()
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
     @JvmStatic
     fun initialize(context: Context) {
         synchronized(initializationLock) {
@@ -200,6 +229,7 @@ private class PersistentMintSession private constructor(
     private val tokenWaiters = mutableMapOf<String, TokenWaiter>()
     @Volatile
     private var closed = false
+    private val closeOnce = AtomicBoolean()
     @Volatile
     private var expiresAtMs = Long.MAX_VALUE
 
@@ -267,6 +297,9 @@ private class PersistentMintSession private constructor(
     }
 
     override fun close() {
+        if (!closeOnce.compareAndSet(false, true)) {
+            return
+        }
         closed = true
         runtime.unregisterSabrLocalDomCallbacks(sessionId)
         synchronized(tokenWaiters) {

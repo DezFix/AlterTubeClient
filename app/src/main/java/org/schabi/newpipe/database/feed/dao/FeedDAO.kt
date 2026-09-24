@@ -23,7 +23,7 @@ abstract class FeedDAO {
 
     @Query(
         """
-        SELECT s.*, sst.progress_time
+        SELECT DISTINCT s.*, sst.progress_time
         FROM streams s
 
         LEFT JOIN stream_state sst
@@ -43,7 +43,7 @@ abstract class FeedDAO {
 
     @Query(
         """
-        SELECT s.*, sst.progress_time
+        SELECT DISTINCT s.*, sst.progress_time
         FROM streams s
 
         LEFT JOIN stream_state sst
@@ -74,7 +74,7 @@ abstract class FeedDAO {
      */
     @Query(
         """
-        SELECT s.*, sst.progress_time
+        SELECT DISTINCT s.*, sst.progress_time
         FROM streams s
 
         LEFT JOIN stream_state sst
@@ -110,7 +110,7 @@ abstract class FeedDAO {
      */
     @Query(
         """
-        SELECT s.*, sst.progress_time
+        SELECT DISTINCT s.*, sst.progress_time
         FROM streams s
 
         LEFT JOIN stream_state sst
