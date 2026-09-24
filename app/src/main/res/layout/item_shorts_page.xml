@@ -19,7 +19,6 @@
         android:layout_height="match_parent"
         app:resize_mode="fit"
         app:show_buffering="never"
-        app:show_subtitles="true"
         app:surface_type="surface_view"
         app:use_controller="false" />
 
