@@ -1,7 +1,6 @@
 package org.schabi.newpipe.fragments.list.shorts;
 
 import android.content.Context;
-import android.media.AudioAttributes;
 import android.os.Bundle;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
@@ -21,6 +20,7 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.audio.AudioAttributes;
 import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.source.MediaSource;
@@ -248,7 +248,7 @@ public class ShortsFragment extends Fragment {
         player.addListener(new Player.Listener() {
             @Override
             public void onPlaybackStateChanged(final boolean playWhenReady, final int state) {
-                onPlayerStateChanged(state);
+                ShortsFragment.this.onPlayerStateChanged(state);
             }
 
             @Override
