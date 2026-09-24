@@ -91,9 +91,13 @@ public abstract class BaseAccountSettingsFragment extends BasePreferenceFragment
     }
 
     private void updateLoginLogoutState() {
-        boolean hasCredentials = !defaultPreferences.getString(getCookiesKey(), "").equals("");
+        final boolean hasCredentials = hasCredentials();
         login.setEnabled(!hasCredentials);
         logout.setEnabled(hasCredentials);
+    }
+
+    protected boolean hasCredentials() {
+        return !defaultPreferences.getString(getCookiesKey(), "").isEmpty();
     }
 
     private void configureOverridePreferences() {

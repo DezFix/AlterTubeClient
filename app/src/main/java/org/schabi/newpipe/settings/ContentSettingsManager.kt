@@ -5,6 +5,7 @@ import android.util.Log
 import org.schabi.newpipe.streams.io.SharpOutputStream
 import org.schabi.newpipe.streams.io.StoredFileHelper
 import org.schabi.newpipe.util.ZipHelper
+import org.schabi.newpipe.youtube.YouTubeCredentialStore
 import java.io.BufferedOutputStream
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -31,7 +32,11 @@ class ContentSettingsManager(private val fileLocator: NewPipeFileLocator) {
 
                 try {
                     ObjectOutputStream(FileOutputStream(fileLocator.settings)).use { output ->
-                        output.writeObject(preferences.all)
+                        output.writeObject(
+                            preferences.all.filterKeys {
+                                !YouTubeCredentialStore.isCredentialKey(it)
+                            }
+                        )
                         output.flush()
                     }
                 } catch (e: IOException) {
@@ -73,12 +78,25 @@ class ContentSettingsManager(private val fileLocator: NewPipeFileLocator) {
     fun loadSharedPreferences(preferences: SharedPreferences) {
         try {
             val preferenceEditor = preferences.edit()
+            val existingSensitivePreferences = preferences.all.mapNotNull { (key, value) ->
+                if (YouTubeCredentialStore.isCredentialKey(key) && value is String) {
+                    key to value
+                } else {
+                    null
+                }
+            }.toMap()
 
             ObjectInputStream(FileInputStream(fileLocator.settings)).use { input ->
                 preferenceEditor.clear()
+                existingSensitivePreferences.forEach { (key, value) ->
+                    preferenceEditor.putString(key, value)
+                }
                 @Suppress("UNCHECKED_CAST")
                 val entries = input.readObject() as Map<String, *>
                 for ((key, value) in entries) {
+                    if (YouTubeCredentialStore.isCredentialKey(key)) {
+                        continue
+                    }
                     when (value) {
                         is Boolean -> {
                             preferenceEditor.putBoolean(key, value)

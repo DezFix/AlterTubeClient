@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -18,6 +17,7 @@ import org.schabi.newpipe.util.DeviceUtils;
 import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.PicassoHelper;
 import org.schabi.newpipe.util.ServiceHelper;
+import org.schabi.newpipe.youtube.YouTubeCredentialStore;
 
 import java.io.IOException;
 
@@ -123,9 +123,7 @@ public class AdvancedSettingsFragment extends BasePreferenceFragment implements 
             return;
         }
 
-        final String youtubeCookies = defaultPreferences.getString(
-                getString(R.string.youtube_cookies_key), null);
-        final boolean hasYouTubeLogin = !TextUtils.isEmpty(youtubeCookies);
+        final boolean hasYouTubeLogin = YouTubeCredentialStore.hasCredentials(requireContext());
         final boolean autoTranslatedSubtitlesEnabled = defaultPreferences.getBoolean(
                 getString(R.string.show_auto_translated_subtitles_key), true);
 
@@ -143,8 +141,7 @@ public class AdvancedSettingsFragment extends BasePreferenceFragment implements 
         if (preference == null) {
             return;
         }
-        final boolean loggedIn = !TextUtils.isEmpty(defaultPreferences.getString(
-                getString(R.string.youtube_cookies_key), null));
+        final boolean loggedIn = YouTubeCredentialStore.hasCredentials(requireContext());
         final String[] entries = getResources().getStringArray(
                 R.array.youtube_player_client_entries);
         final String[] values = getResources().getStringArray(

@@ -27,6 +27,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
@@ -34,6 +35,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import static org.schabi.newpipe.MainActivity.DEBUG;
@@ -59,7 +61,7 @@ public final class DownloaderImpl extends Downloader {
 //                .cache(new Cache(new File(context.getExternalCacheDir(), "okhttp"),
 //                        16 * 1024 * 1024))
                 .build();
-        this.mCookies = new HashMap<>();
+        this.mCookies = new ConcurrentHashMap<>();
     }
 
     /**
@@ -148,16 +150,31 @@ public final class DownloaderImpl extends Downloader {
 
     public String getCookies(final String url) {
         final List<String> resultCookies = new ArrayList<>();
-        if (url.contains(YOUTUBE_DOMAIN)) {
+        final String host;
+        try {
+            host = new URI(url).getHost();
+        } catch (final Exception ignored) {
+            return "";
+        }
+        if (host == null) {
+            return "";
+        }
+        final String normalizedHost = host.toLowerCase(Locale.ROOT);
+        final boolean youtubeHost = normalizedHost.equals(YOUTUBE_DOMAIN)
+                || normalizedHost.endsWith("." + YOUTUBE_DOMAIN);
+        final boolean googleHost = normalizedHost.equals("google.com")
+                || normalizedHost.endsWith(".google.com");
+        if (youtubeHost) {
             final String youtubeCookie = getCookie(YOUTUBE_RESTRICTED_MODE_COOKIE_KEY);
             if (youtubeCookie != null) {
                 resultCookies.add(youtubeCookie);
             }
         }
-        // Recaptcha cookie is always added TODO: not sure if this is necessary
-        final String recaptchaCookie = getCookie(ReCaptchaActivity.RECAPTCHA_COOKIES_KEY);
-        if (recaptchaCookie != null) {
-            resultCookies.add(recaptchaCookie);
+        if (youtubeHost || googleHost) {
+            final String recaptchaCookie = getCookie(ReCaptchaActivity.RECAPTCHA_COOKIES_KEY);
+            if (recaptchaCookie != null) {
+                resultCookies.add(recaptchaCookie);
+            }
         }
         return CookieUtils.concatCookies(resultCookies);
     }
@@ -167,7 +184,11 @@ public final class DownloaderImpl extends Downloader {
     }
 
     public void setCookie(final String key, final String cookie) {
-        mCookies.put(key, cookie);
+        if (cookie == null) {
+            mCookies.remove(key);
+        } else {
+            mCookies.put(key, cookie);
+        }
     }
 
     public void removeCookie(final String key) {
@@ -485,10 +506,10 @@ public final class DownloaderImpl extends Downloader {
 
             @Override
             public void onResponse(Call call, okhttp3.Response response) throws IOException {
+                boolean callbackInvoked = false;
                 try {
                     if (response.code() == 429) {
-                        callback.onError(new ReCaptchaException("reCaptcha Challenge requested", url));
-                        return;
+                        throw new ReCaptchaException("reCaptcha Challenge requested", url);
                     }
 
                     ResponseBody body = response.body();
@@ -509,9 +530,12 @@ public final class DownloaderImpl extends Downloader {
                     Response newPipeResponse = new Response(response.code(), response.message(),
                             response.headers().toMultimap(), responseBodyToReturn, rawBodyBytes, latestUrl);
 
+                    callbackInvoked = true;
                     callback.onSuccess(newPipeResponse);
-                } catch (Exception e) {
-                    e.printStackTrace();
+                } catch (final Exception e) {
+                    if (!callbackInvoked) {
+                        callback.onError(e);
+                    }
                 } finally {
                     response.close();
                     cancellableCall.setFinished();

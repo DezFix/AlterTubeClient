@@ -147,6 +147,13 @@ public class SubscriptionsImportService extends BaseImportExportService {
         if (subscription != null) {
             subscription.cancel();
         }
+        if (inputStream != null) {
+            try {
+                inputStream.close();
+            } catch (final IOException ignored) {
+            }
+            inputStream = null;
+        }
     }
 
     /*//////////////////////////////////////////////////////////////////////////

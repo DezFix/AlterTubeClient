@@ -71,6 +71,9 @@ class SubscriptionManager(context: Context) {
             subscriptionItems.map { SubscriptionEntity.from(it) }
         )
 
+    fun mergeImportedSubscriptions(subscriptionItems: List<SubscriptionItem>): List<SubscriptionEntity> =
+        insertAll(subscriptionItems)
+
     fun updateChannelInfo(subscriptionId: Long, info: ChannelInfo) {
         val subscriptionEntity = subscriptionTable.getSubscription(subscriptionId)
         if (info.name == null) return

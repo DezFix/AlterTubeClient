@@ -122,6 +122,9 @@ public class PlayerService extends Service implements PlayerServiceInterface {
 
     @Override
     public int onStartCommand(final Intent intent, final int flags, final int startId) {
+        if (intent == null) {
+            return START_NOT_STICKY;
+        }
         if (DEBUG) {
             Log.d(TAG, "onStartCommand() called with: intent = [" + intent
                     + "], flags = [" + flags + "], startId = [" + startId + "]");

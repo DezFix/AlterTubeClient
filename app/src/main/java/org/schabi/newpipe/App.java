@@ -6,7 +6,6 @@ import android.content.*;
 import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -29,6 +28,7 @@ import org.schabi.newpipe.ktx.ExceptionUtils;
 import org.schabi.newpipe.settings.NewPipeSettings;
 import org.schabi.newpipe.util.*;
 import org.schabi.newpipe.youtube.LocalDomPoTokenProvider;
+import org.schabi.newpipe.youtube.YouTubeCredentialStore;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -116,8 +116,10 @@ public class App extends MultiDexApplication {
             });
         }
 
+        YouTubeCredentialStore.prepareForStartup(this);
         // Initialize settings first because others inits can use its values
         NewPipeSettings.initSettings(this);
+        YouTubeCredentialStore.restoreAfterSettingsMigration(this);
         // Set this before any activity is created so AppCompat can apply the selected night mode
         // while attaching the activity's base context.
         ThemeHelper.setDayNightMode(this);
@@ -160,8 +162,7 @@ public class App extends MultiDexApplication {
     public static void reconcileYoutubePlayerClient(@NonNull final Context context) {
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         final String playerClientKey = context.getString(R.string.youtube_player_client_key);
-        final boolean loggedIn = !TextUtils.isEmpty(prefs.getString(
-                context.getString(R.string.youtube_cookies_key), null));
+        final boolean loggedIn = YouTubeCredentialStore.hasCredentials(context);
         final String defaultClient = loggedIn ? "mweb" : "visionos";
         final String selectedClient = prefs.getString(playerClientKey, defaultClient);
         final boolean allowed = loggedIn

@@ -401,7 +401,7 @@ public final class Player implements
             new SeekbarPreviewThumbnailHolder();
 
     private Future<?> enqueueTimer;
-    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);;
+    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
 
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -1031,6 +1031,7 @@ public final class Player implements
         closeAllPopupMenus();
         
         destroyPlayer();
+        executor.shutdownNow();
         unregisterBroadcastReceiver();
 
         databaseUpdateDisposable.clear();
@@ -3200,8 +3201,9 @@ public final class Player implements
                 }
                 break;
             case ERROR_CODE_IO_UNSPECIFIED:
-                if (error.getCause().getMessage() != null
-                        && error.getCause().getMessage().contains("Response code: 403")) {
+                final Throwable cause = error.getCause();
+                if (cause != null && cause.getMessage() != null
+                        && cause.getMessage().contains("Response code: 403")) {
                     try {
                         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity())
                                 .setTitle(R.string.network_error)

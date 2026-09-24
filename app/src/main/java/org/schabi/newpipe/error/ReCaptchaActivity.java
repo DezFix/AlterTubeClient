@@ -89,10 +89,6 @@ public class ReCaptchaActivity extends AppCompatActivity {
         recaptchaBinding.reCaptchaWebView.setWebViewClient(new WebViewClientCompat() {
             @Override
             public boolean shouldOverrideUrlLoading(final WebView view, final String url) {
-                if (MainActivity.DEBUG) {
-                    Log.d(TAG, "shouldOverrideUrlLoading: url=" + url);
-                }
-
                 handleCookiesFromUrl(url);
                 return false;
             }
@@ -145,10 +141,6 @@ public class ReCaptchaActivity extends AppCompatActivity {
     private void saveCookiesAndFinish() {
         // try to get cookies of unclosed page
         handleCookiesFromUrl(recaptchaBinding.reCaptchaWebView.getUrl());
-        if (MainActivity.DEBUG) {
-            Log.d(TAG, "saveCookiesAndFinish: foundCookies=" + foundCookies);
-        }
-
         if (!foundCookies.isEmpty()) {
             // save cookies to preferences
             final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(
@@ -171,10 +163,6 @@ public class ReCaptchaActivity extends AppCompatActivity {
 
 
     private void handleCookiesFromUrl(@Nullable final String url) {
-        if (MainActivity.DEBUG) {
-            Log.d(TAG, "handleCookiesFromUrl: url=" + (url == null ? "null" : url));
-        }
-
         if (url == null) {
             return;
         }
@@ -193,19 +181,13 @@ public class ReCaptchaActivity extends AppCompatActivity {
                 handleCookies(abuseCookie);
             } catch (UnsupportedEncodingException | StringIndexOutOfBoundsException e) {
                 if (MainActivity.DEBUG) {
-                    e.printStackTrace();
-                    Log.d(TAG, "handleCookiesFromUrl: invalid google abuse starting at "
-                            + abuseStart + " and ending at " + abuseEnd + " for url " + url);
+                    Log.d(TAG, "handleCookiesFromUrl: invalid google abuse token");
                 }
             }
         }
     }
 
     private void handleCookies(@Nullable final String cookies) {
-        if (MainActivity.DEBUG) {
-            Log.d(TAG, "handleCookies: cookies=" + (cookies == null ? "null" : cookies));
-        }
-
         if (cookies == null) {
             return;
         }

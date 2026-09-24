@@ -60,6 +60,18 @@ public abstract class StreamHistoryDAO implements HistoryDAO<StreamHistoryEntity
             + " ORDER BY " + STREAM_ID + " ASC")
     public abstract Flowable<List<StreamHistoryEntry>> getHistorySortedById();
 
+    @Query("SELECT streams.*, history." + JOIN_STREAM_ID
+            + ", history." + STREAM_ACCESS_DATE + ", history." + STREAM_REPEAT_COUNT
+            + " FROM " + STREAM_TABLE + " streams"
+            + " INNER JOIN " + STREAM_HISTORY_TABLE + " history"
+            + " ON streams." + STREAM_ID + " = history." + JOIN_STREAM_ID
+            + " WHERE history." + STREAM_ACCESS_DATE + " = ("
+            + "SELECT MAX(recent." + STREAM_ACCESS_DATE + ") FROM "
+            + STREAM_HISTORY_TABLE + " recent"
+            + " WHERE recent." + JOIN_STREAM_ID + " = history." + JOIN_STREAM_ID + ")"
+            + " ORDER BY history." + STREAM_ACCESS_DATE + " DESC")
+    public abstract Flowable<List<StreamHistoryEntry>> getRecentHistory();
+
     @Query("SELECT * FROM " + STREAM_HISTORY_TABLE + " WHERE " + JOIN_STREAM_ID
             + " = :streamId ORDER BY " + STREAM_ACCESS_DATE + " DESC LIMIT 1")
     @Nullable

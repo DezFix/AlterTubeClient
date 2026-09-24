@@ -104,6 +104,7 @@ public class RouterActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         if (savedInstanceState != null) {
             currentServiceId = savedInstanceState.getInt("currentServiceId", -1);
+            currentUrl = savedInstanceState.getString("currentUrl");
             String linkTypeName = savedInstanceState.getString("currentLinkType");
             if (linkTypeName != null) {
                 currentLinkType = LinkType.valueOf(linkTypeName);
@@ -139,6 +140,7 @@ public class RouterActivity extends AppCompatActivity {
     protected void onSaveInstanceState(@NonNull final Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putInt("currentServiceId", currentServiceId);
+        outState.putString("currentUrl", currentUrl);
         if (currentLinkType != null) {
             outState.putString("currentLinkType", currentLinkType.name());
         }

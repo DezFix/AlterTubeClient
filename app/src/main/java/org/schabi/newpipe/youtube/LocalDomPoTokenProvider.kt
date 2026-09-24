@@ -2,12 +2,10 @@ package org.schabi.newpipe.youtube
 
 import android.content.Context
 import android.util.Log
-import androidx.preference.PreferenceManager
 import com.grack.nanojson.JsonObject
 import com.grack.nanojson.JsonParser
 import com.grack.nanojson.JsonWriter
 import org.schabi.newpipe.DownloaderImpl
-import org.schabi.newpipe.R
 import org.schabi.newpipe.SharedWebViewRuntime
 import org.schabi.newpipe.extractor.services.youtube.YoutubePoTokenResult
 import org.schabi.newpipe.extractor.services.youtube.sabr.exception.SabrProtocolException
@@ -50,19 +48,21 @@ object LocalDomPoTokenProvider {
     }
 
     fun invalidate() {
-        val sessionToClose: PersistentMintSession
+        var sessionToClose: PersistentMintSession? = null
         synchronized(initializationLock) {
             val task = initializationTask ?: return
-            if (!task.isDone || task.isCancelled) return
-            val state = try {
-                task.get()
-            } catch (_: Exception) {
-                return
+            if (!task.isDone || task.isCancelled) {
+                task.cancel(true)
+                initializationTask = null
+            } else {
+                try {
+                    sessionToClose = task.get().session
+                } catch (_: Exception) {
+                }
+                initializationTask = null
             }
-            initializationTask = null
-            sessionToClose = state.session
         }
-        sessionToClose.close()
+        sessionToClose?.close()
         Log.i(TAG, "Invalidated rejected PO token minter")
         warmUp()
     }
@@ -104,9 +104,10 @@ object LocalDomPoTokenProvider {
         synchronized(initializationLock) {
             initializationTask?.let { return it }
             val task = FutureTask {
-                val loginCookies = PreferenceManager.getDefaultSharedPreferences(appContext)
-                    .getString(appContext.getString(R.string.youtube_cookies_key), null)
-                    ?.takeIf(String::isNotBlank)
+                val storedCookies = YouTubeCredentialStore.getCookies(appContext)
+                val loginCookies = storedCookies?.takeIf {
+                    YouTubeCredentialStore.hasSessionCookie(it)
+                }
                 val loggedIn = loginCookies != null
                 val bootstrap = fetchHomeBootstrap(loginCookies)
                 if (bootstrap.binding == YoutubePoTokenBinding.NONE) {
