@@ -68,8 +68,8 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
     private boolean shortsActivityLaunchPending;
     private boolean shortsActivityLaunched;
 
-    private final ViewPager.OnPageChangeCallback mainPagerCallback =
-            new ViewPager.SimpleOnPageChangeCallback() {
+    private final ViewPager.OnPageChangeListener mainPagerListener =
+            new ViewPager.SimpleOnPageChangeListener() {
                 @Override
                 public void onPageSelected(final int position) {
                     if (isShortsPosition(position)) {
@@ -133,7 +133,7 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
         super.initViews(rootView, savedInstanceState);
 
         binding = FragmentMainBinding.bind(rootView);
-        binding.pager.addOnPageChangeCallback(mainPagerCallback);
+        binding.pager.addOnPageChangeListener(mainPagerListener);
 
         binding.mainTabLayout.setupWithViewPager(binding.pager);
         binding.mainTabLayout.addOnTabSelectedListener(this);
@@ -178,7 +178,7 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
         super.onDestroy();
         tabsManager.unsetSavedTabsListener();
         if (binding != null) {
-            binding.pager.removeOnPageChangeCallback(mainPagerCallback);
+            binding.pager.removeOnPageChangeListener(mainPagerListener);
             binding.pager.setAdapter(null);
             binding = null;
         }
