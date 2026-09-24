@@ -247,7 +247,7 @@ public class ShortsFragment extends Fragment {
         applyRepeatMode();
         player.addListener(new Player.Listener() {
             @Override
-            public void onPlaybackStateChanged(final boolean playWhenReady, final int state) {
+            public void onPlaybackStateChanged(final int state) {
                 ShortsFragment.this.onPlayerStateChanged(state);
             }
 
