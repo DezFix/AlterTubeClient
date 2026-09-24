@@ -301,7 +301,7 @@ public class RecommendedFragment extends Fragment {
         } else {
             previous.score += score;
             if (previous.uploadEpoch == null
-                    || uploadEpoch != null && uploadEpoch.isAfter(previous.uploadEpoch)) {
+                    || uploadEpoch != null && uploadEpoch > previous.uploadEpoch) {
                 previous.uploadEpoch = uploadEpoch;
             }
         }

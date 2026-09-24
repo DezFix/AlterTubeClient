@@ -136,9 +136,8 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
                     }
 
                     @Override
-                    public boolean onLongPress(@NonNull final MotionEvent event) {
+                    public void onLongPress(@NonNull final MotionEvent event) {
                         holder.itemView.removeCallbacks(holder.pendingSingleTap);
-                        return true;
                     }
                 });
         holder.itemView.setOnTouchListener((view, event) ->

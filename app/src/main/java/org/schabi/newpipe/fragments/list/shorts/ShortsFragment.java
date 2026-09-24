@@ -1,6 +1,7 @@
 package org.schabi.newpipe.fragments.list.shorts;
 
 import android.content.Context;
+import android.media.AudioAttributes;
 import android.os.Bundle;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
@@ -18,7 +19,6 @@ import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
-import com.google.android.exoplayer2.AudioAttributes;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.PlaybackException;
@@ -247,7 +247,7 @@ public class ShortsFragment extends Fragment {
         applyRepeatMode();
         player.addListener(new Player.Listener() {
             @Override
-            public void onPlaybackStateChanged(final int state) {
+            public void onPlaybackStateChanged(final boolean playWhenReady, final int state) {
                 onPlayerStateChanged(state);
             }
 
@@ -602,7 +602,8 @@ public class ShortsFragment extends Fragment {
         qualitySelections.clear();
         final StreamInfo info = currentStreamInfo();
         if (info == null) {
-            qualityMenu.setVisible(false);
+            qualityMenu.add(0, MENU_QUALITY_AUTO, 0, R.string.quality_auto)
+                    .setEnabled(false);
             return;
         }
         final List<VideoStream> streams = new ArrayList<>();
@@ -1314,9 +1315,6 @@ public class ShortsFragment extends Fragment {
                 .subscribe(mediaSource -> {
                     if (player == null || binding == null
                             || token != resolveToken || position != currentPosition) {
-                        if (mediaSource != null) {
-                            mediaSource.release();
-                        }
                         return;
                     }
                     if (mediaSource == null) {
