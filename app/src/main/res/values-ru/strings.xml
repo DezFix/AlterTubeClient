@@ -104,7 +104,6 @@
     <string name="youtube_sync_login_required">Сначала войдите в YouTube</string>
     <string name="recommended_tab_title">Рекомендуемое</string>
     <string name="recommended_error">Пока нечего рекомендовать — посмотрите несколько видео</string>
-    <string name="music_tab_title">Музыка</string>
     <string name="could_not_load_thumbnails">Не удалось загрузить все миниатюры</string>
     <string name="youtube_signature_deobfuscation_error">Не удалось расшифровать подпись URL у видео</string>
     <string name="controls_background_title">В фоне</string>

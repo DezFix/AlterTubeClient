@@ -8,6 +8,7 @@ import static com.google.android.material.tabs.TabLayout.INDICATOR_GRAVITY_BOTTO
 import static com.google.android.material.tabs.TabLayout.INDICATOR_GRAVITY_TOP;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -44,11 +45,15 @@ import org.schabi.newpipe.util.NavigationHelper;
 import org.schabi.newpipe.util.ServiceHelper;
 import org.schabi.newpipe.util.ThemeHelper;
 import org.schabi.newpipe.views.ScrollableTabLayout;
+import org.schabi.newpipe.views.ShortsPlayerActivity;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainFragment extends BaseFragment implements TabLayout.OnTabSelectedListener {
+    private static final String STATE_LAST_NON_SHORTS_POSITION = "last_non_shorts_position";
+    private static final String STATE_SHORTS_ACTIVITY_LAUNCHED = "shorts_activity_launched";
+
     private FragmentMainBinding binding;
     private SelectedTabsPagerAdapter pagerAdapter;
 
@@ -59,6 +64,21 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
     private SharedPreferences prefs;
     private boolean mainTabsPositionBottom;
     private String mainTabsPositionKey;
+    private int lastNonShortsPosition = -1;
+    private boolean shortsActivityLaunchPending;
+    private boolean shortsActivityLaunched;
+
+    private final ViewPager.OnPageChangeCallback mainPagerCallback =
+            new ViewPager.SimpleOnPageChangeCallback() {
+                @Override
+                public void onPageSelected(final int position) {
+                    if (isShortsPosition(position)) {
+                        launchShortsPlayer();
+                    } else if (position >= 0 && position < tabsList.size()) {
+                        lastNonShortsPosition = position;
+                    }
+                }
+            };
 
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -85,7 +105,20 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
         prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
         mainTabsPositionKey = getString(R.string.main_tabs_position_key);
         mainTabsPositionBottom = prefs.getBoolean(mainTabsPositionKey, false);
+        if (savedInstanceState != null) {
+            lastNonShortsPosition = savedInstanceState.getInt(
+                    STATE_LAST_NON_SHORTS_POSITION, -1);
+            shortsActivityLaunched = savedInstanceState.getBoolean(
+                    STATE_SHORTS_ACTIVITY_LAUNCHED, false);
+        }
 
+    }
+
+    @Override
+    public void onSaveInstanceState(@NonNull final Bundle outState) {
+        outState.putInt(STATE_LAST_NON_SHORTS_POSITION, lastNonShortsPosition);
+        outState.putBoolean(STATE_SHORTS_ACTIVITY_LAUNCHED, shortsActivityLaunched);
+        super.onSaveInstanceState(outState);
     }
 
     @Override
@@ -100,6 +133,7 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
         super.initViews(rootView, savedInstanceState);
 
         binding = FragmentMainBinding.bind(rootView);
+        binding.pager.addOnPageChangeCallback(mainPagerCallback);
 
         binding.mainTabLayout.setupWithViewPager(binding.pager);
         binding.mainTabLayout.addOnTabSelectedListener(this);
@@ -113,9 +147,23 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
     @Override
     public void onResume() {
         super.onResume();
+        final boolean returningFromShortsPlayer = shortsActivityLaunched;
+        shortsActivityLaunched = false;
+        shortsActivityLaunchPending = false;
 
         if (hasTabsChanged) {
             setupTabs();
+        }
+
+        if (binding != null && isShortsPosition(binding.pager.getCurrentItem())) {
+            if (returningFromShortsPlayer) {
+                final int fallbackPosition = getFallbackPosition();
+                if (fallbackPosition >= 0) {
+                    binding.pager.setCurrentItem(fallbackPosition, false);
+                }
+            } else {
+                binding.pager.post(this::launchShortsPlayer);
+            }
         }
 
         final boolean newMainTabsPosition = prefs.getBoolean(mainTabsPositionKey, false);
@@ -130,6 +178,7 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
         super.onDestroy();
         tabsManager.unsetSavedTabsListener();
         if (binding != null) {
+            binding.pager.removeOnPageChangeCallback(mainPagerCallback);
             binding.pager.setAdapter(null);
             binding = null;
         }
@@ -188,10 +237,52 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
         binding.pager.setOffscreenPageLimit(tabsList.size());
         binding.pager.setAdapter(pagerAdapter);
 
+        final int currentPosition = binding.pager.getCurrentItem();
+        if (!isShortsPosition(currentPosition)) {
+            lastNonShortsPosition = currentPosition;
+        } else if (lastNonShortsPosition < 0) {
+            lastNonShortsPosition = getFallbackPosition();
+        }
+
         updateTabsIconAndDescription();
         updateTitleForTab(binding.pager.getCurrentItem());
 
         hasTabsChanged = false;
+    }
+
+    private boolean isShortsPosition(final int position) {
+        return position >= 0 && position < tabsList.size()
+                && tabsList.get(position) instanceof Tab.ShortsTab;
+    }
+
+    private int getFallbackPosition() {
+        if (lastNonShortsPosition >= 0 && lastNonShortsPosition < tabsList.size()
+                && !isShortsPosition(lastNonShortsPosition)) {
+            return lastNonShortsPosition;
+        }
+        for (int position = 0; position < tabsList.size(); position++) {
+            if (!isShortsPosition(position)) {
+                return position;
+            }
+        }
+        return -1;
+    }
+
+    private void launchShortsPlayer() {
+        if (!isResumed() || binding == null || shortsActivityLaunchPending) {
+            return;
+        }
+        shortsActivityLaunchPending = true;
+        shortsActivityLaunched = true;
+        startActivity(new Intent(requireContext(), ShortsPlayerActivity.class));
+        final int fallbackPosition = getFallbackPosition();
+        if (fallbackPosition >= 0) {
+            binding.pager.post(() -> {
+                if (binding != null && binding.pager.getCurrentItem() != fallbackPosition) {
+                    binding.pager.setCurrentItem(fallbackPosition, false);
+                }
+            });
+        }
     }
 
     private void updateTabsIconAndDescription() {
@@ -246,6 +337,9 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
             Log.d(TAG, "onTabSelected() called with: selectedTab = [" + selectedTab + "]");
         }
         updateTitleForTab(selectedTab.getPosition());
+        if (isShortsPosition(selectedTab.getPosition())) {
+            launchShortsPlayer();
+        }
     }
 
     @Override
@@ -257,6 +351,9 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
             Log.d(TAG, "onTabReselected() called with: tab = [" + tab + "]");
         }
         updateTitleForTab(tab.getPosition());
+        if (isShortsPosition(tab.getPosition())) {
+            launchShortsPlayer();
+        }
     }
 
     private static final class SelectedTabsPagerAdapter

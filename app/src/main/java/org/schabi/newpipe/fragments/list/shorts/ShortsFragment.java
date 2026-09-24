@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.audio.AudioAttributes;
 import com.google.android.exoplayer2.analytics.PlayerId;
@@ -54,6 +55,7 @@ import org.schabi.newpipe.fragments.list.shorts.ShortsPagerAdapter.ShortsPageHol
 import org.schabi.newpipe.local.history.HistoryRecordManager;
 import org.schabi.newpipe.local.subscription.SubscriptionManager;
 import org.schabi.newpipe.player.helper.AudioReactor;
+import org.schabi.newpipe.player.helper.CustomRenderersFactory;
 import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.helper.PlayerHelper;
 import org.schabi.newpipe.player.resolver.QualityResolver;
@@ -138,6 +140,8 @@ public class ShortsFragment extends Fragment {
     private boolean userPaused;
     private boolean playRequested;
     private boolean resumeWhenVisible;
+    private boolean playerReloadRequired;
+    private boolean firstFrameRendered;
     private boolean resumed;
     private boolean muted;
     private boolean zoom;
@@ -233,6 +237,8 @@ public class ShortsFragment extends Fragment {
         binding.shortsPager.setOffscreenPageLimit(1);
         binding.shortsPager.registerOnPageChangeCallback(pageCallback);
         binding.shortsRetryButton.setOnClickListener(v -> loadFeed());
+        binding.shortsCloseButton.setOnClickListener(v ->
+                requireActivity().getOnBackPressedDispatcher().onBackPressed());
         binding.shortsPlayButton.setOnClickListener(v -> togglePlayPause());
         binding.shortsMuteButton.setOnClickListener(v -> toggleMute());
         binding.shortsMenuButton.setOnClickListener(v -> showMenu());
@@ -255,15 +261,27 @@ public class ShortsFragment extends Fragment {
                 new DefaultBandwidthMeter.Builder(context).build());
         videoResolver = new VideoPlaybackResolver(context, dataSource, getQualityResolver());
         historyManager = new HistoryRecordManager(context);
-        player = new ExoPlayer.Builder(context)
+        final DefaultRenderersFactory renderFactory = preferences.getBoolean(
+                context.getString(R.string.always_use_exoplayer_set_output_surface_workaround_key),
+                false)
+                ? new CustomRenderersFactory(context) : new DefaultRenderersFactory(context);
+        if (preferences.getBoolean(
+                context.getString(R.string.disable_exoplayer_media_codec_async_queueing_key), false)) {
+            renderFactory.forceDisableMediaCodecAsynchronousQueueing();
+        }
+        renderFactory.setEnableDecoderFallback(true);
+        player = new ExoPlayer.Builder(context, renderFactory)
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
                         .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
                         .build(), false)
                 .build();
+        binding.shortsPlayerView.setPlayer(player);
+        applyZoomMode();
         audioReactor = new AudioReactor(context, player);
         player.setSeekParameters(PlayerHelper.getSeekParameters(context));
         player.setHandleAudioBecomingNoisy(true);
+        player.setWakeMode(C.WAKE_MODE_NETWORK);
         player.setPlaybackSpeed(playbackSpeed);
         player.setVolume(muted ? 0f : 1f);
         applyRepeatMode();
@@ -278,12 +296,23 @@ public class ShortsFragment extends Fragment {
                 updateTopBar();
                 updateKeepScreenOn();
                 if (isPlaying) {
+                    if (firstFrameRendered) {
+                        hideCurrentThumbnail();
+                    }
                     if (playbackToken == resolveToken) {
                         recordCurrentView();
                     }
                     startProgressUpdates();
                 } else {
                     stopProgressUpdates();
+                }
+            }
+
+            @Override
+            public void onRenderedFirstFrame() {
+                if (playerPosition == currentPosition && playbackToken == resolveToken) {
+                    firstFrameRendered = true;
+                    hideCurrentThumbnail();
                 }
             }
 
@@ -361,6 +390,12 @@ public class ShortsFragment extends Fragment {
 
     private void togglePlayPause() {
         if (player == null) {
+            return;
+        }
+        if (playerReloadRequired) {
+            userPaused = false;
+            playRequested = true;
+            reloadPlayerIfNeeded();
             return;
         }
         final ShortsPageHolder holder = currentHolder();
@@ -732,9 +767,8 @@ public class ShortsFragment extends Fragment {
     }
 
     private void applyZoomMode() {
-        final ShortsPageHolder holder = currentHolder();
-        if (holder != null) {
-            holder.playerView.setResizeMode(zoom
+        if (binding != null) {
+            binding.shortsPlayerView.setResizeMode(zoom
                     ? AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                     : AspectRatioFrameLayout.RESIZE_MODE_FIT);
         }
@@ -745,9 +779,54 @@ public class ShortsFragment extends Fragment {
         userPaused = true;
         playRequested = false;
         pausePlayback();
-        NavigationHelper.openVideoDetailFragment(requireContext(),
-                getParentFragmentManager(), item.getServiceId(), item.getUrl(),
+        playerReloadRequired = true;
+        firstFrameRendered = false;
+        playerPosition = -1;
+        playbackToken = -1;
+        openingToken = -1;
+        if (player != null) {
+            player.stop();
+            player.clearMediaItems();
+        }
+        showCurrentThumbnail();
+        NavigationHelper.openVideoDetail(requireContext(), item.getServiceId(), item.getUrl(),
                 item.getName(), null, false);
+    }
+
+    private void reloadPlayerIfNeeded() {
+        if (!playerReloadRequired) {
+            return;
+        }
+        playerReloadRequired = false;
+        if (!isValidPosition(currentPosition)) {
+            return;
+        }
+        firstFrameRendered = false;
+        showCurrentThumbnail();
+        final ShortsPageHolder holder = currentHolder();
+        if (holder != null) {
+            holder.hideError();
+            holder.loading.setVisibility(View.VISIBLE);
+        }
+        playerPosition = -1;
+        playbackToken = -1;
+        openingToken = -1;
+        resolveToken++;
+        resolvePosition(currentPosition, false, true);
+    }
+
+    private void showCurrentThumbnail() {
+        final ShortsPageHolder holder = currentHolder();
+        if (holder != null) {
+            holder.thumbnail.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void hideCurrentThumbnail() {
+        final ShortsPageHolder holder = currentHolder();
+        if (holder != null) {
+            holder.thumbnail.setVisibility(View.GONE);
+        }
     }
 
     @Override
@@ -768,6 +847,7 @@ public class ShortsFragment extends Fragment {
     public void onResume() {
         super.onResume();
         resumed = true;
+        reloadPlayerIfNeeded();
         if (player != null && player.getCurrentMediaItem() != null
                 && playerPosition == currentPosition && playbackToken == resolveToken
                 && !userPaused) {
@@ -798,9 +878,7 @@ public class ShortsFragment extends Fragment {
         stopAdvanceRunnable();
         disposables.clear();
         savePlaybackState();
-        if (currentHolder() != null) {
-            currentHolder().detachPlayer();
-        }
+        binding.shortsPlayerView.setPlayer(null);
         if (audioReactor != null) {
             audioReactor.dispose();
             audioReactor = null;
@@ -818,6 +896,8 @@ public class ShortsFragment extends Fragment {
         userPaused = false;
         playRequested = false;
         resumeWhenVisible = false;
+        playerReloadRequired = false;
+        firstFrameRendered = false;
         resumed = false;
         feedPageRetry = false;
         errorAttempts.clear();
@@ -851,6 +931,8 @@ public class ShortsFragment extends Fragment {
         sourceIndex = 0;
         userPaused = false;
         playRequested = false;
+        playerReloadRequired = false;
+        firstFrameRendered = false;
         if (player != null) {
             player.stop();
             player.clearMediaItems();
@@ -1367,15 +1449,18 @@ public class ShortsFragment extends Fragment {
         }
         stopAdvanceRunnable();
         playbackToken = -1;
+        firstFrameRendered = false;
         if (currentPosition >= 0) {
             savePlaybackState();
             pausePlayback();
             final ShortsPageHolder previous = holderAt(currentPosition);
             if (previous != null) {
-                previous.detachPlayer();
+                previous.setKeepScreenOn(false);
+                previous.thumbnail.setVisibility(View.VISIBLE);
             }
         }
         playerPosition = -1;
+        playerReloadRequired = false;
         feedPageRetry = false;
         userPaused = false;
         final Context pageContext = getContext();
@@ -1423,6 +1508,10 @@ public class ShortsFragment extends Fragment {
         }, Math.max(0L, attempt * 200L));
     }
 
+    private static boolean hasVideoStreams(@NonNull final StreamInfo info) {
+        return !info.getVideoStreams().isEmpty() || !info.getVideoOnlyStreams().isEmpty();
+    }
+
     private void resolvePosition(final int position, final boolean force,
                                  final boolean openIfCurrent) {
         if (!isValidPosition(position)) {
@@ -1431,6 +1520,13 @@ public class ShortsFragment extends Fragment {
         if (!force) {
             final StreamInfo cached = infoCache.get(position);
             if (cached != null) {
+                if (!hasVideoStreams(cached)) {
+                    infoCache.remove(position);
+                    if (openIfCurrent && position == currentPosition) {
+                        showCurrentPageError(R.string.shorts_playback_error);
+                    }
+                    return;
+                }
                 if (openIfCurrent && position == currentPosition) {
                     openStream(position, resolveToken, cached);
                 }
@@ -1467,6 +1563,14 @@ public class ShortsFragment extends Fragment {
                     final boolean active = resolvingPositions.get(position) == request;
                     final boolean currentToken = !request.force || request.token == resolveToken;
                     if (active && currentToken && request.generation == feedGeneration) {
+                        if (!hasVideoStreams(info)) {
+                            infoCache.remove(position);
+                            if (position == currentPosition
+                                    && (request.openWhenCurrent || openIfCurrent)) {
+                                showCurrentPageError(R.string.shorts_playback_error);
+                            }
+                            return;
+                        }
                         infoCache.put(position, info);
                     }
                     if (active && currentToken && request.generation == feedGeneration
@@ -1500,6 +1604,11 @@ public class ShortsFragment extends Fragment {
                 || token != resolveToken || position != currentPosition) {
             return;
         }
+        if (!hasVideoStreams(info)) {
+            infoCache.remove(position);
+            showCurrentPageError(R.string.shorts_playback_error);
+            return;
+        }
         final ShortsPageHolder holder = holderAt(position);
         if (holder == null) {
             scheduleOpenResolvedPosition(position, attempt + 1, token, feedGeneration);
@@ -1509,6 +1618,7 @@ public class ShortsFragment extends Fragment {
             return;
         }
         openingToken = token;
+        firstFrameRendered = false;
         holder.loading.setVisibility(View.VISIBLE);
         holder.hideError();
         holder.thumbnail.setVisibility(View.VISIBLE);
@@ -1556,8 +1666,9 @@ public class ShortsFragment extends Fragment {
                     }
                     playerPosition = position;
                     playbackToken = token;
+                    firstFrameRendered = false;
                     fillChannelRow(activeHolder, position, info);
-                    activeHolder.attachPlayer(player, shouldKeepScreenOn());
+                    activeHolder.thumbnail.setVisibility(View.VISIBLE);
                     try {
                         player.setMediaSource(mediaSource, initialPosition);
                         sourceAttached.set(true);
@@ -1640,9 +1751,11 @@ public class ShortsFragment extends Fragment {
         resolveToken++;
         feedPageRetry = false;
         final ShortsPageHolder holder = currentHolder();
+        firstFrameRendered = false;
         if (holder != null) {
             holder.hideError();
             holder.loading.setVisibility(View.VISIBLE);
+            holder.thumbnail.setVisibility(View.VISIBLE);
         }
         errorAttempts.merge(currentPosition, 1, Integer::sum);
         resolvePosition(currentPosition, force, true);
@@ -1699,8 +1812,10 @@ public class ShortsFragment extends Fragment {
         if (state == Player.STATE_READY) {
             if (holder != null) {
                 holder.loading.setVisibility(View.GONE);
-                holder.thumbnail.setVisibility(View.GONE);
                 holder.hideError();
+            }
+            if (firstFrameRendered) {
+                hideCurrentThumbnail();
             }
             errorAttempts.remove(currentPosition);
             if (resumed && playRequested && !userPaused && player.isPlaying()) {
@@ -1708,6 +1823,7 @@ public class ShortsFragment extends Fragment {
             }
         } else if (state == Player.STATE_BUFFERING && holder != null) {
             holder.loading.setVisibility(View.VISIBLE);
+            holder.thumbnail.setVisibility(View.VISIBLE);
         } else if (state == Player.STATE_ENDED) {
             if (audioReactor != null) {
                 audioReactor.abandonAudioFocus();

@@ -15,8 +15,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.StringRes;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.exoplayer2.ExoPlayer;
-import com.google.android.exoplayer2.ui.PlayerView;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import org.schabi.newpipe.R;
@@ -94,7 +92,6 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
         holder.avatar.setImageDrawable(null);
         holder.subscribeButton.setText(R.string.shorts_subscribe);
         holder.thumbnail.setVisibility(View.VISIBLE);
-        holder.playerView.setPlayer(null);
         holder.loading.setVisibility(View.GONE);
         holder.progress.setProgress(0);
         holder.shareButton.setOnClickListener(v -> clickAt(holder,
@@ -169,7 +166,7 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
 
     @Override
     public void onViewRecycled(@NonNull final ShortsPageHolder holder) {
-        holder.detachPlayer();
+        holder.itemView.setKeepScreenOn(false);
         holder.clearCallbacks();
         super.onViewRecycled(holder);
     }
@@ -189,7 +186,6 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
     }
 
     static class ShortsPageHolder extends RecyclerView.ViewHolder {
-        final PlayerView playerView;
         final ImageView thumbnail;
         final ImageView playIndicator;
         final TextView seekFeedback;
@@ -213,7 +209,6 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
 
         ShortsPageHolder(@NonNull final View itemView) {
             super(itemView);
-            playerView = itemView.findViewById(R.id.shorts_player_view);
             thumbnail = itemView.findViewById(R.id.shorts_thumbnail);
             playIndicator = itemView.findViewById(R.id.shorts_play_indicator);
             seekFeedback = itemView.findViewById(R.id.shorts_seek_feedback);
@@ -234,7 +229,6 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
 
         void prepareForBind() {
             clearCallbacks();
-            detachPlayer();
             errorBox.setVisibility(View.GONE);
             sound.setText("");
             PicassoHelper.cancelTag(avatar);
@@ -243,20 +237,8 @@ public class ShortsPagerAdapter extends RecyclerView.Adapter<ShortsPagerAdapter.
             seeking = false;
         }
 
-        void attachPlayer(final ExoPlayer player, final boolean keepScreenOn) {
-            playerView.setPlayer(player);
-            playerView.setKeepContentOnPlayerReset(true);
-            itemView.setKeepScreenOn(keepScreenOn);
-        }
-
         void setKeepScreenOn(final boolean keepScreenOn) {
             itemView.setKeepScreenOn(keepScreenOn);
-        }
-
-        void detachPlayer() {
-            playerView.setKeepContentOnPlayerReset(false);
-            playerView.setPlayer(null);
-            itemView.setKeepScreenOn(false);
         }
 
         void showError(@StringRes final int message) {

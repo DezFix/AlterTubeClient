@@ -22,10 +22,8 @@ import org.schabi.newpipe.fragments.BlankFragment;
 import org.schabi.newpipe.fragments.list.channel.ChannelVideosFragment;
 import org.schabi.newpipe.fragments.list.kiosk.DefaultKioskFragment;
 import org.schabi.newpipe.fragments.list.kiosk.KioskFragment;
-import org.schabi.newpipe.fragments.list.music.MusicFragment;
 import org.schabi.newpipe.fragments.list.playlist.PlaylistFragment;
 import org.schabi.newpipe.fragments.list.recommended.RecommendedFragment;
-import org.schabi.newpipe.fragments.list.shorts.ShortsFragment;
 import org.schabi.newpipe.local.bookmark.BookmarkFragment;
 import org.schabi.newpipe.local.feed.FeedFragment;
 import org.schabi.newpipe.local.history.StatisticsPlaylistFragment;
@@ -171,8 +169,7 @@ public abstract class Tab {
         PLAYLIST(new PlaylistTab()),
         CHANNEL_GROUP(new ChannelGroupTab()),
         SHORTS(new ShortsTab()),
-        RECOMMENDED(new RecommendedTab()),
-        MUSIC(new MusicTab());
+        RECOMMENDED(new RecommendedTab());
 
         private final Tab tab;
 
@@ -769,7 +766,7 @@ public abstract class Tab {
 
         @Override
         public Fragment getFragment(final Context context) {
-            return ShortsFragment.newInstance();
+            return new BlankFragment();
         }
     }
 
@@ -798,28 +795,4 @@ public abstract class Tab {
         }
     }
 
-    public static class MusicTab extends Tab {
-        public static final int ID = 12;
-
-        @Override
-        public int getTabId() {
-            return ID;
-        }
-
-        @Override
-        public String getTabName(final Context context) {
-            return context.getString(R.string.music_tab_title);
-        }
-
-        @DrawableRes
-        @Override
-        public int getTabIconRes(final Context context) {
-            return R.drawable.ic_music_note;
-        }
-
-        @Override
-        public Fragment getFragment(final Context context) {
-            return MusicFragment.newInstance();
-        }
-    }
 }
