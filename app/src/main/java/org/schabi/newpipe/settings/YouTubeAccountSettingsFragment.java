@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
@@ -129,7 +131,8 @@ public class YouTubeAccountSettingsFragment extends BaseAccountSettingsFragment 
         Context context = requireContext().getApplicationContext();
         try {
             YouTubeSubscriptionImportHelper.clearDefaultYoutubeBrowsingData(
-                    context, () -> runOnUiThread(() -> completeLogout(context)));
+                    context, () -> new Handler(Looper.getMainLooper())
+                            .post(() -> completeLogout(context)));
         } catch (RuntimeException ignored) {
             completeLogout(context);
         }
