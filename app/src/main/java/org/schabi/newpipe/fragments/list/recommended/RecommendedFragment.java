@@ -395,7 +395,7 @@ public class RecommendedFragment extends Fragment {
                         .getFeedInfoFallbackToChannelInfo(
                                 subscription.getServiceId(), subscription.getUrl())
                         .blockingGet()
-                        .getItems();
+                        .getRelatedItems();
                 for (final StreamInfoItem item : items) {
                     if (added >= MAX_SUBSCRIPTION_ITEMS) {
                         break;
