@@ -60,6 +60,7 @@ import org.schabi.newpipe.player.helper.PlayerDataSource;
 import org.schabi.newpipe.player.helper.PlayerHelper;
 import org.schabi.newpipe.player.resolver.QualityResolver;
 import org.schabi.newpipe.player.resolver.VideoPlaybackResolver;
+import org.schabi.newpipe.settings.NewPipeSettings;
 import org.schabi.newpipe.util.ContentFilter;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.ListHelper;
@@ -147,6 +148,7 @@ public class ShortsFragment extends Fragment {
     private boolean zoom;
     private boolean autoAdvance;
     private boolean feedPageRetry;
+    private boolean lastPersonalizedFeedSetting;
     private float playbackSpeed = 1f;
     private String selectedResolution;
     private String selectedCodec;
@@ -244,6 +246,7 @@ public class ShortsFragment extends Fragment {
         binding.shortsMenuButton.setOnClickListener(v -> showMenu());
 
         final Context context = requireContext().getApplicationContext();
+        lastPersonalizedFeedSetting = NewPipeSettings.isPersonalizedFeedEnabled(context);
         final android.content.SharedPreferences preferences =
                 PreferenceManager.getDefaultSharedPreferences(context);
         muted = feedModel.getItems().isEmpty()
@@ -343,7 +346,11 @@ public class ShortsFragment extends Fragment {
             }
         });
 
-        if (!feedModel.getItems().isEmpty() && !feedModel.getSources().isEmpty()) {
+        final boolean canRestoreFeed = !feedModel.getItems().isEmpty()
+                && !feedModel.getSources().isEmpty()
+                && feedModel.hasPersonalizedFeedMode()
+                && feedModel.isPersonalizedFeed() == lastPersonalizedFeedSetting;
+        if (canRestoreFeed) {
             restoreFeed();
         } else {
             loadFeed();
@@ -847,6 +854,12 @@ public class ShortsFragment extends Fragment {
     public void onResume() {
         super.onResume();
         resumed = true;
+        final boolean personalized = NewPipeSettings.isPersonalizedFeedEnabled(requireContext());
+        if (personalized != lastPersonalizedFeedSetting) {
+            lastPersonalizedFeedSetting = personalized;
+            loadFeed();
+            return;
+        }
         reloadPlayerIfNeeded();
         if (player != null && player.getCurrentMediaItem() != null
                 && playerPosition == currentPosition && playbackToken == resolveToken
@@ -951,6 +964,7 @@ public class ShortsFragment extends Fragment {
                         showFeedError();
                         return;
                     }
+                    feedModel.setPersonalizedFeed(lastPersonalizedFeedSetting);
                     feedModel.setSources(sources);
                     sourceIndex = 0;
                     loadSourceAt(0, generation, true);
@@ -968,7 +982,8 @@ public class ShortsFragment extends Fragment {
             final List<StreamHistoryEntry> history;
             try {
                 final HistoryRecordManager manager = new HistoryRecordManager(context);
-                history = manager.isStreamHistoryEnabled()
+                history = NewPipeSettings.isPersonalizedFeedEnabled(context)
+                        && manager.isStreamHistoryEnabled()
                         ? manager.getRecentStreamHistory().blockingFirst(new ArrayList<>())
                         : new ArrayList<>();
             } catch (final Exception ignored) {

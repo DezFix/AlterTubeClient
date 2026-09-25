@@ -22,7 +22,9 @@ package org.schabi.newpipe.local.subscription.services;
 import static org.schabi.newpipe.MainActivity.DEBUG;
 import static org.schabi.newpipe.streams.io.StoredFileHelper.DEFAULT_MIME;
 
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.util.Log;
 
@@ -36,13 +38,18 @@ import org.schabi.newpipe.App;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.database.subscription.SubscriptionEntity;
 import org.schabi.newpipe.extractor.NewPipe;
+import org.schabi.newpipe.extractor.ServiceList;
 import org.schabi.newpipe.extractor.subscription.SubscriptionItem;
 import org.schabi.newpipe.streams.io.SharpInputStream;
 import org.schabi.newpipe.streams.io.StoredFileHelper;
 import org.schabi.newpipe.util.Constants;
+import org.schabi.newpipe.youtube.YouTubeSubscriptionImportHelper;
+import org.schabi.newpipe.youtube.YouTubeSubscriptionImportHelper.Channel;
+import org.schabi.newpipe.youtube.YouTubeSubscriptionImportHelper.ResolvedChannelList;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -54,9 +61,13 @@ public class SubscriptionsImportService extends BaseImportExportService {
     public static final int CHANNEL_URL_MODE = 0;
     public static final int INPUT_STREAM_MODE = 1;
     public static final int PREVIOUS_EXPORT_MODE = 2;
+    public static final int CHANNEL_LIST_MODE = 3;
     public static final String KEY_MODE = "key_mode";
     public static final String KEY_VALUE = "key_value";
+    public static final String KEY_TEXT = "key_text";
     public static final String KEY_INSERTED_SUBSCRIPTION_IDS = "inserted_subscription_ids";
+    private static final String IMPORT_STATE_PREFERENCES = "subscription_import_state";
+    private static final String KEY_IMPORT_COMPLETE_PENDING = "import_complete_pending";
 
     /**
      * A {@link LocalBroadcastManager local broadcast} will be made with this action
@@ -65,20 +76,43 @@ public class SubscriptionsImportService extends BaseImportExportService {
     public static final String IMPORT_COMPLETE_ACTION = App.PACKAGE_NAME + ".local.subscription"
             + ".services.SubscriptionsImportService.IMPORT_COMPLETE";
 
+    public static boolean consumePendingImportCompletion(final Context context) {
+        final SharedPreferences preferences = context.getSharedPreferences(
+                IMPORT_STATE_PREFERENCES, Context.MODE_PRIVATE);
+        if (!preferences.getBoolean(KEY_IMPORT_COMPLETE_PENDING, false)) {
+            return false;
+        }
+        return preferences.edit().putBoolean(KEY_IMPORT_COMPLETE_PENDING, false).commit();
+    }
+
+    private void markImportCompleted() {
+        getSharedPreferences(IMPORT_STATE_PREFERENCES, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_IMPORT_COMPLETE_PENDING, true).apply();
+    }
+
     private Subscription subscription;
     private long[] insertedSubscriptionIds = new long[0];
     private int currentMode;
     private int currentServiceId;
+    private boolean importRunning;
     @Nullable
     private String channelUrl;
+    @Nullable
+    private String pastedChannelList;
     @Nullable
     private InputStream inputStream;
     @Nullable
     private String inputStreamType;
+    private int resolvedChannelListCount;
+    private int skippedChannelListCount;
 
     @Override
     public int onStartCommand(final Intent intent, final int flags, final int startId) {
-        if (intent == null || subscription != null) {
+        if (intent == null) {
+            return START_NOT_STICKY;
+        }
+        if (importRunning) {
+            showToast(R.string.import_already_running);
             return START_NOT_STICKY;
         }
 
@@ -87,6 +121,8 @@ public class SubscriptionsImportService extends BaseImportExportService {
 
         if (currentMode == CHANNEL_URL_MODE) {
             channelUrl = intent.getStringExtra(KEY_VALUE);
+        } else if (currentMode == CHANNEL_LIST_MODE) {
+            pastedChannelList = intent.getStringExtra(KEY_TEXT);
         } else {
             final Uri uri = intent.getParcelableExtra(KEY_VALUE);
             if (uri == null) {
@@ -117,7 +153,10 @@ public class SubscriptionsImportService extends BaseImportExportService {
             }
         }
 
-        if (currentMode == -1 || currentMode == CHANNEL_URL_MODE && channelUrl == null) {
+        if (currentMode == -1
+                || currentMode == CHANNEL_URL_MODE && channelUrl == null
+                || currentMode == CHANNEL_LIST_MODE
+                && (pastedChannelList == null || pastedChannelList.isBlank())) {
             final String errorDescription = "Some important field is null or in illegal state: "
                     + "currentMode=[" + currentMode + "], "
                     + "channelUrl=[" + channelUrl + "], "
@@ -127,6 +166,7 @@ public class SubscriptionsImportService extends BaseImportExportService {
             return START_NOT_STICKY;
         }
 
+        importRunning = true;
         startImport();
         return START_NOT_STICKY;
     }
@@ -144,6 +184,7 @@ public class SubscriptionsImportService extends BaseImportExportService {
     @Override
     protected void disposeAll() {
         super.disposeAll();
+        importRunning = false;
         if (subscription != null) {
             subscription.cancel();
         }
@@ -173,6 +214,9 @@ public class SubscriptionsImportService extends BaseImportExportService {
                 break;
             case PREVIOUS_EXPORT_MODE:
                 flowable = importFromPreviousExport();
+                break;
+            case CHANNEL_LIST_MODE:
+                flowable = importFromChannelList();
                 break;
         }
 
@@ -228,11 +272,20 @@ public class SubscriptionsImportService extends BaseImportExportService {
 
             @Override
             public void onComplete() {
+                markImportCompleted();
                 LocalBroadcastManager.getInstance(SubscriptionsImportService.this)
                         .sendBroadcast(new Intent(IMPORT_COMPLETE_ACTION)
                                 .putExtra(KEY_INSERTED_SUBSCRIPTION_IDS,
                                         insertedSubscriptionIds));
-                showToast(R.string.import_complete_toast);
+                if (currentMode == CHANNEL_LIST_MODE) {
+                    final int alreadySubscribed = Math.max(0,
+                            resolvedChannelListCount - insertedSubscriptionIds.length);
+                    showToast(getString(R.string.import_channel_list_complete,
+                            insertedSubscriptionIds.length, alreadySubscribed,
+                            skippedChannelListCount));
+                } else {
+                    showToast(R.string.import_complete_toast);
+                }
                 stopService();
             }
         };
@@ -251,6 +304,23 @@ public class SubscriptionsImportService extends BaseImportExportService {
         return Flowable.fromCallable(() -> NewPipe.getService(currentServiceId)
                 .getSubscriptionExtractor()
                 .fromInputStream(inputStream, inputStreamType));
+    }
+
+    private Flowable<List<SubscriptionItem>> importFromChannelList() {
+        return Flowable.fromCallable(() -> {
+            if (currentServiceId != ServiceList.YouTube.getServiceId()) {
+                throw new IOException("Pasted channel lists are only supported for YouTube");
+            }
+            final ResolvedChannelList resolved = YouTubeSubscriptionImportHelper
+                    .resolvePastedChannelList(Objects.requireNonNull(pastedChannelList));
+            resolvedChannelListCount = resolved.getChannels().size();
+            skippedChannelListCount = resolved.getSkippedCount();
+            final List<SubscriptionItem> items = new ArrayList<>();
+            for (final Channel channel : resolved.getChannels()) {
+                items.add(new SubscriptionItem(currentServiceId, channel.getUrl(), channel.getName()));
+            }
+            return items;
+        });
     }
 
     private Flowable<List<SubscriptionItem>> importFromPreviousExport() {

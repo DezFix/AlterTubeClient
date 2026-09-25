@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Bundle
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -21,6 +22,10 @@ class SubscriptionImportDetailsCoordinator(private val fragment: Fragment) :
 
     private val importCompleteReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            fragment.parentFragmentManager.setFragmentResult(
+                IMPORT_COMPLETE_REQUEST,
+                Bundle.EMPTY
+            )
             val subscriptionIds = intent.getLongArrayExtra(KEY_INSERTED_SUBSCRIPTION_IDS)
             if (subscriptionIds != null && subscriptionIds.isNotEmpty()) {
                 SubscriptionDetailsConfirmationDialog.show(fragment, subscriptionIds)
@@ -55,5 +60,9 @@ class SubscriptionImportDetailsCoordinator(private val fragment: Fragment) :
             broadcastManager.unregisterReceiver(importCompleteReceiver)
             receiverRegistered = false
         }
+    }
+
+    companion object {
+        const val IMPORT_COMPLETE_REQUEST = "subscription_import_complete"
     }
 }

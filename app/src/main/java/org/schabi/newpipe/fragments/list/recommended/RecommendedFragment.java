@@ -1,6 +1,9 @@
 package org.schabi.newpipe.fragments.list.recommended;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -9,11 +12,13 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.database.feed.model.FeedGroupEntity;
 import org.schabi.newpipe.database.history.model.StreamHistoryEntry;
 import org.schabi.newpipe.database.stream.StreamWithState;
+import org.schabi.newpipe.database.subscription.SubscriptionEntity;
 import org.schabi.newpipe.databinding.FragmentRecommendedBinding;
 import org.schabi.newpipe.extractor.InfoItem;
 import org.schabi.newpipe.extractor.ServiceList;
@@ -21,7 +26,12 @@ import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.local.feed.FeedDatabaseManager;
+import org.schabi.newpipe.local.feed.service.FeedLoadManager;
 import org.schabi.newpipe.local.history.HistoryRecordManager;
+import org.schabi.newpipe.local.subscription.SubscriptionImportDetailsCoordinator;
+import org.schabi.newpipe.local.subscription.SubscriptionManager;
+import org.schabi.newpipe.local.subscription.services.SubscriptionsImportService;
+import org.schabi.newpipe.settings.NewPipeSettings;
 import org.schabi.newpipe.util.ContentFilter;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.NavigationHelper;
@@ -48,6 +58,7 @@ public class RecommendedFragment extends Fragment {
     private static final int SEED_COUNT = 6;
     private static final int MAX_RELATED_PER_SEED = 20;
     private static final int MAX_SUBSCRIPTION_ITEMS = 10;
+    private static final int MAX_FRESH_SUBSCRIPTION_CHANNELS = 4;
     private static final int MAX_ITEMS = 30;
     private static final int MAX_ITEMS_PER_CHANNEL = 2;
     private static final Set<String> STOP_WORDS = new HashSet<>(java.util.Arrays.asList(
@@ -60,10 +71,39 @@ public class RecommendedFragment extends Fragment {
 
     private FragmentRecommendedBinding binding;
     private RecommendedAdapter adapter;
+    private final BroadcastReceiver subscriptionImportReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(final Context context, final Intent intent) {
+            if (binding != null
+                    && SubscriptionsImportService.consumePendingImportCompletion(context)) {
+                load(true);
+            }
+        }
+    };
+    private boolean subscriptionImportReceiverRegistered;
     private SerialDisposable loadDisposable = new SerialDisposable();
+    private Boolean lastPersonalizedSetting;
 
     public static RecommendedFragment newInstance() {
         return new RecommendedFragment();
+    }
+
+    @Override
+    public void onCreate(@Nullable final Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        requireActivity().getSupportFragmentManager().setFragmentResultListener(
+                SubscriptionImportDetailsCoordinator.IMPORT_COMPLETE_REQUEST, this,
+                (key, result) -> onSubscriptionImportComplete());
+        getParentFragmentManager().setFragmentResultListener(
+                SubscriptionImportDetailsCoordinator.IMPORT_COMPLETE_REQUEST, this,
+                (key, result) -> onSubscriptionImportComplete());
+    }
+
+    private void onSubscriptionImportComplete() {
+        if (binding != null && SubscriptionsImportService.consumePendingImportCompletion(
+                requireContext())) {
+            load(true);
+        }
     }
 
     @Nullable
@@ -87,14 +127,55 @@ public class RecommendedFragment extends Fragment {
             }
             final StreamInfoItem item = adapter.getItem(position);
             NavigationHelper.openVideoDetailFragment(requireContext(),
-                    getParentFragmentManager(), item.getServiceId(), item.getUrl(),
-                    item.getName(), null, false);
+                    requireActivity().getSupportFragmentManager(), item.getServiceId(),
+                    item.getUrl(), item.getName(), null, false);
         });
         binding.recommendedList.setLayoutManager(
                 new androidx.recyclerview.widget.GridLayoutManager(requireContext(), 2));
         binding.recommendedList.setAdapter(adapter);
         binding.recommendedRetryButton.setOnClickListener(v -> load());
+        binding.recommendedImportButton.setOnClickListener(v ->
+                NavigationHelper.openSubscriptionsImportFragment(
+                        requireActivity().getSupportFragmentManager(),
+                        ServiceList.YouTube.getServiceId()));
         load();
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (!subscriptionImportReceiverRegistered) {
+            LocalBroadcastManager.getInstance(requireContext()).registerReceiver(
+                    subscriptionImportReceiver,
+                    new IntentFilter(SubscriptionsImportService.IMPORT_COMPLETE_ACTION));
+            subscriptionImportReceiverRegistered = true;
+        }
+    }
+
+    @Override
+    public void onStop() {
+        if (subscriptionImportReceiverRegistered) {
+            LocalBroadcastManager.getInstance(requireContext()).unregisterReceiver(
+                    subscriptionImportReceiver);
+            subscriptionImportReceiverRegistered = false;
+        }
+        super.onStop();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (binding != null) {
+            final Context context = requireContext().getApplicationContext();
+            if (SubscriptionsImportService.consumePendingImportCompletion(context)) {
+                load(true);
+            } else {
+                final boolean personalized = NewPipeSettings.isPersonalizedFeedEnabled(context);
+                if (lastPersonalizedSetting == null || lastPersonalizedSetting != personalized) {
+                    load();
+                }
+            }
+        }
     }
 
     @Override
@@ -106,10 +187,22 @@ public class RecommendedFragment extends Fragment {
     }
 
     private void load() {
+        load(false);
+    }
+
+    private void load(final boolean refreshFeed) {
         final Context context = requireContext().getApplicationContext();
+        final boolean personalized = NewPipeSettings.isPersonalizedFeedEnabled(context);
+        lastPersonalizedSetting = personalized;
+        binding.recommendedSummary.setText(personalized
+                ? R.string.recommended_personalized_summary
+                : R.string.recommended_non_personalized_summary);
+        binding.recommendedErrorText.setText(personalized
+                ? R.string.recommended_error
+                : R.string.recommended_subscriptions_required);
         binding.recommendedLoading.setVisibility(View.VISIBLE);
         binding.recommendedErrorBox.setVisibility(View.GONE);
-        loadDisposable.set(buildRecommendations(context)
+        loadDisposable.set(buildRecommendations(context, personalized, refreshFeed)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(items -> {
@@ -118,24 +211,41 @@ public class RecommendedFragment extends Fragment {
                     }
                     binding.recommendedLoading.setVisibility(View.GONE);
                     if (items.isEmpty()) {
+                        adapter.setItems(items);
                         binding.recommendedErrorBox.setVisibility(View.VISIBLE);
                     } else {
                         adapter.setItems(items);
                     }
                 }, throwable -> {
                     if (binding != null) {
+                        adapter.setItems(new ArrayList<>());
                         binding.recommendedLoading.setVisibility(View.GONE);
                         binding.recommendedErrorBox.setVisibility(View.VISIBLE);
                     }
                 }));
     }
 
-    private Single<List<StreamInfoItem>> buildRecommendations(final Context context) {
+    private Single<List<StreamInfoItem>> buildRecommendations(final Context context,
+                                                               final boolean personalized,
+                                                               final boolean refreshFeed) {
         return Single.fromCallable(() -> {
+            if (refreshFeed) {
+                try {
+                    new FeedLoadManager(context).startLoading(
+                            FeedGroupEntity.GROUP_ALL_ID, false).blockingGet();
+                } catch (final Exception ignored) {
+                }
+            }
             final List<StreamHistoryEntry> history;
+            if (!personalized) {
+                return rankSubscriptionItems(context, new HashSet<>(), new HashMap<>());
+            }
+            final HistoryRecordManager historyManager = new HistoryRecordManager(context);
+            if (!historyManager.isStreamHistoryEnabled()) {
+                return rankSubscriptionItems(context, new HashSet<>(), new HashMap<>());
+            }
             try {
-                history = new HistoryRecordManager(context)
-                        .getRecentStreamHistory()
+                history = historyManager.getRecentStreamHistory()
                         .blockingFirst(new ArrayList<>());
             } catch (final Exception ignored) {
                 return new ArrayList<>();
@@ -177,40 +287,53 @@ public class RecommendedFragment extends Fragment {
                 addRelatedCandidates(seeds, watchedUrls, watchedChannels,
                         interestTokens, scored);
             }
-            if (scored.isEmpty()) {
-                return new ArrayList<>();
-            }
-
-            final List<ScoredItem> ranked = new ArrayList<>(scored.values());
-            ranked.sort(Comparator
-                    .comparingInt((ScoredItem value) -> value.score).reversed()
-                    .thenComparing(value -> value.uploadEpoch,
-                            Comparator.nullsLast(Comparator.reverseOrder())));
-
-            final List<StreamInfoItem> result = new ArrayList<>();
-            final Map<String, Integer> channelCounts = new HashMap<>();
-            final List<ScoredItem> deferred = new ArrayList<>();
-            for (final ScoredItem value : ranked) {
-                final String channel = channelKey(value.item);
-                final int count = channelCounts.getOrDefault(channel, 0);
-                if (count >= MAX_ITEMS_PER_CHANNEL) {
-                    deferred.add(value);
-                } else {
-                    result.add(value.item);
-                    channelCounts.put(channel, count + 1);
-                    if (result.size() >= MAX_ITEMS) {
-                        return result;
-                    }
-                }
-            }
-            for (final ScoredItem value : deferred) {
-                if (result.size() >= MAX_ITEMS) {
-                    break;
-                }
-                result.add(value.item);
-            }
-            return result;
+            return rankItems(scored);
         });
+    }
+
+    private List<StreamInfoItem> rankSubscriptionItems(
+            final Context context,
+            final Set<String> watchedUrls,
+            final Map<String, Integer> interestTokens) {
+        final Map<String, ScoredItem> scored = new HashMap<>();
+        addSubscriptionCandidates(context, watchedUrls, interestTokens, scored);
+        return rankItems(scored);
+    }
+
+    private List<StreamInfoItem> rankItems(final Map<String, ScoredItem> scored) {
+        if (scored.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        final List<ScoredItem> ranked = new ArrayList<>(scored.values());
+        ranked.sort(Comparator
+                .comparingInt((ScoredItem value) -> value.score).reversed()
+                .thenComparing(value -> value.uploadEpoch,
+                        Comparator.nullsLast(Comparator.reverseOrder())));
+
+        final List<StreamInfoItem> result = new ArrayList<>();
+        final Map<String, Integer> channelCounts = new HashMap<>();
+        final List<ScoredItem> deferred = new ArrayList<>();
+        for (final ScoredItem value : ranked) {
+            final String channel = channelKey(value.item);
+            final int count = channelCounts.getOrDefault(channel, 0);
+            if (count >= MAX_ITEMS_PER_CHANNEL) {
+                deferred.add(value);
+            } else {
+                result.add(value.item);
+                channelCounts.put(channel, count + 1);
+                if (result.size() >= MAX_ITEMS) {
+                    return result;
+                }
+            }
+        }
+        for (final ScoredItem value : deferred) {
+            if (result.size() >= MAX_ITEMS) {
+                break;
+            }
+            result.add(value.item);
+        }
+        return result;
     }
 
     private void addSubscriptionCandidates(
@@ -242,6 +365,51 @@ public class RecommendedFragment extends Fragment {
                 }
                 merge(scored, item, score, uploadEpoch(item));
                 added++;
+            }
+            if (added == 0) {
+                addFreshSubscriptionCandidates(context, watchedUrls, interestTokens, scored);
+            }
+        } catch (final Exception ignored) {
+        }
+    }
+
+    private void addFreshSubscriptionCandidates(
+            final Context context,
+            final Set<String> watchedUrls,
+            final Map<String, Integer> interestTokens,
+            final Map<String, ScoredItem> scored) {
+        try {
+            final List<SubscriptionEntity> subscriptions = new SubscriptionManager(context)
+                    .subscriptionTable().getAll().blockingFirst(new ArrayList<>());
+            int channelCount = 0;
+            int added = 0;
+            for (final SubscriptionEntity subscription : subscriptions) {
+                if (channelCount >= MAX_FRESH_SUBSCRIPTION_CHANNELS || added >= MAX_SUBSCRIPTION_ITEMS) {
+                    break;
+                }
+                if (subscription.getServiceId() != ServiceList.YouTube.getServiceId()) {
+                    continue;
+                }
+                channelCount++;
+                final List<StreamInfoItem> items = ExtractorHelper
+                        .getFeedInfoFallbackToChannelInfo(
+                                subscription.getServiceId(), subscription.getUrl())
+                        .blockingGet()
+                        .getItems();
+                for (final StreamInfoItem item : items) {
+                    if (added >= MAX_SUBSCRIPTION_ITEMS) {
+                        break;
+                    }
+                    if (!isUsable(item, watchedUrls)) {
+                        continue;
+                    }
+                    int score = 24;
+                    for (final String token : tokens(item.getName())) {
+                        score += Math.min(4, interestTokens.getOrDefault(token, 0));
+                    }
+                    merge(scored, item, score, uploadEpoch(item));
+                    added++;
+                }
             }
         } catch (final Exception ignored) {
         }

@@ -162,6 +162,17 @@ class SubscriptionFragment : BaseStateFragment<SubscriptionState>() {
         LocalBroadcastManager.getInstance(activity).registerReceiver(subscriptionBroadcastReceiver!!, filters)
     }
 
+    private fun importChannelListFromClipboard() {
+        val errorMessage = importExportHelper.importChannelListFromClipboard()
+        if (errorMessage != 0) {
+            Toast.makeText(
+                requireContext(),
+                errorMessage,
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     private fun onImportFromServiceSelected(serviceId: Int) {
         val fragmentManager = fm
         NavigationHelper.openSubscriptionsImportFragment(fragmentManager, serviceId)
@@ -220,6 +231,7 @@ class SubscriptionFragment : BaseStateFragment<SubscriptionState>() {
         // Import/Export section
         importExportItem = FeedImportExportItem(
             { importExportHelper.importSubscriptions() },
+            { importChannelListFromClipboard() },
             { onImportFromServiceSelected(it) },
             { importExportHelper.exportSubscriptions() },
             importExportItemExpandedState ?: false,

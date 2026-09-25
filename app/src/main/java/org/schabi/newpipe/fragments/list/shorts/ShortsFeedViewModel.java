@@ -18,6 +18,7 @@ public class ShortsFeedViewModel extends ViewModel {
     private boolean muted;
     private boolean zoom;
     private boolean autoAdvance;
+    private Boolean personalizedFeed;
 
     public List<StreamInfoItem> getItems() {
         return items;
@@ -93,11 +94,24 @@ public class ShortsFeedViewModel extends ViewModel {
         this.autoAdvance = autoAdvance;
     }
 
+    public boolean hasPersonalizedFeedMode() {
+        return personalizedFeed != null;
+    }
+
+    public boolean isPersonalizedFeed() {
+        return Boolean.TRUE.equals(personalizedFeed);
+    }
+
+    public void setPersonalizedFeed(final boolean personalizedFeed) {
+        this.personalizedFeed = personalizedFeed;
+    }
+
     public void reset() {
         items.clear();
         playbackPositions.clear();
         sources.clear();
         sourceIndex = 0;
         position = 0;
+        personalizedFeed = null;
     }
 }

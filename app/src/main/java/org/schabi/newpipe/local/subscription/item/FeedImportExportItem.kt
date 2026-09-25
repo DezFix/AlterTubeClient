@@ -21,6 +21,7 @@ import org.schabi.newpipe.views.CollapsibleView
 
 class FeedImportExportItem(
     val onImportPreviousSelected: () -> Unit,
+    val onImportChannelListSelected: () -> Unit,
     val onImportFromServiceSelected: (Int) -> Unit,
     val onExportSelected: () -> Unit,
     var isExpanded: Boolean = false,
@@ -122,6 +123,12 @@ class FeedImportExportItem(
     }
 
     private fun setupImportFromItems(listHolder: ViewGroup) {
+        val channelListItem = addItemView(
+            listHolder.context.getString(R.string.import_channel_list),
+            R.drawable.ic_backup, listHolder
+        )
+        channelListItem.setOnClickListener { onImportChannelListSelected() }
+
         val previousBackupItem = addItemView(
             listHolder.context.getString(R.string.previous_export),
             R.drawable.ic_backup, listHolder

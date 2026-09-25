@@ -8,6 +8,7 @@ import androidx.preference.PreferenceManager;
 
 import org.schabi.newpipe.R;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class TabsManager {
@@ -35,25 +36,47 @@ public final class TabsManager {
      * owns the order completely.
      */
     private static final int TABS_SCHEME_V3 = 3;
+    private static final int TABS_SCHEME_V4 = 4;
 
     public List<Tab> getTabs() {
         final String savedJson = sharedPreferences.getString(savedTabsKey, null);
+        final int scheme = sharedPreferences.getInt(TABS_SCHEME_KEY, 0);
         try {
-            if (savedJson != null && !savedJson.isEmpty() && needsSchemeMigration()) {
-                final List<Tab> fresh = getDefaultTabs();
-                saveTabs(fresh);
-                sharedPreferences.edit().putInt(TABS_SCHEME_KEY, TABS_SCHEME_V3).apply();
-                return fresh;
+            if (scheme < TABS_SCHEME_V4) {
+                final List<Tab> tabs;
+                if (savedJson == null || savedJson.isEmpty() || scheme < TABS_SCHEME_V3) {
+                    tabs = getDefaultTabs();
+                } else {
+                    tabs = addRecommendedFirst(TabsJsonHelper.getTabsFromJson(savedJson));
+                }
+                saveTabsAndScheme(tabs);
+                return tabs;
             }
             return TabsJsonHelper.getTabsFromJson(savedJson);
         } catch (final TabsJsonHelper.InvalidJsonException e) {
             Toast.makeText(context, R.string.saved_tabs_invalid_json, Toast.LENGTH_SHORT).show();
-            return getDefaultTabs();
+            final List<Tab> tabs = getDefaultTabs();
+            saveTabsAndScheme(tabs);
+            return tabs;
         }
     }
 
-    private boolean needsSchemeMigration() {
-        return sharedPreferences.getInt(TABS_SCHEME_KEY, 0) < TABS_SCHEME_V3;
+    private List<Tab> addRecommendedFirst(final List<Tab> tabs) {
+        final List<Tab> result = new ArrayList<>();
+        for (final Tab tab : tabs) {
+            if (tab.getTabId() != Tab.Type.RECOMMENDED.getTabId()) {
+                result.add(tab);
+            }
+        }
+        result.add(0, Tab.Type.RECOMMENDED.getTab());
+        return result;
+    }
+
+    private void saveTabsAndScheme(final List<Tab> tabs) {
+        sharedPreferences.edit()
+                .putString(savedTabsKey, TabsJsonHelper.getJsonToSave(tabs))
+                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V4)
+                .apply();
     }
 
     public void saveTabs(final List<Tab> tabList) {
@@ -62,7 +85,10 @@ public final class TabsManager {
     }
 
     public void resetTabs() {
-        sharedPreferences.edit().remove(savedTabsKey).apply();
+        sharedPreferences.edit()
+                .remove(savedTabsKey)
+                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V4)
+                .apply();
     }
 
     public List<Tab> getDefaultTabs() {

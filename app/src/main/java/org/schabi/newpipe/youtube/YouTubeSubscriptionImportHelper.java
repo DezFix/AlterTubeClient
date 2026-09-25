@@ -18,6 +18,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper;
+import org.schabi.newpipe.extractor.subscription.SubscriptionExtractor.InvalidSourceException;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -40,6 +41,8 @@ public final class YouTubeSubscriptionImportHelper {
     public static final String LOGIN_PROFILE_NAME = "youtube_account_login";
     private static final String YOUTUBE_ORIGIN = "https://www.youtube.com";
     private static final String MEDIA_HOST_SUFFIX = ".googlevideo.com";
+    private static final int MAX_PASTED_CHANNEL_LIST_LENGTH = 500_000;
+    private static final int MAX_PASTED_CHANNELS = 500;
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     private static final String COLLECTION_SCRIPT =
@@ -160,6 +163,89 @@ public final class YouTubeSubscriptionImportHelper {
         }
     }
 
+    public static boolean isPastedChannelListSizeSupported(final String contents) {
+        return contents != null && contents.length() <= MAX_PASTED_CHANNEL_LIST_LENGTH;
+    }
+
+    public static ResolvedChannelList resolvePastedChannelList(String contents)
+            throws IOException, InvalidSourceException {
+        if (contents == null || contents.isBlank()) {
+            throw new InvalidSourceException("Clipboard is empty");
+        }
+        if (!isPastedChannelListSizeSupported(contents)) {
+            throw new InvalidSourceException("Channel list is too large");
+        }
+
+        final Map<String, Channel> candidateChannels = new LinkedHashMap<>();
+        int skippedCount = 0;
+        int entryCount = 0;
+        for (final String rawLine : contents.split("\\R", -1)) {
+            final String line = rawLine.trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            entryCount++;
+            if (entryCount > MAX_PASTED_CHANNELS) {
+                throw new InvalidSourceException("Too many channels");
+            }
+
+            final Channel candidate = normalizePastedChannelEntry(line);
+            if (candidate == null) {
+                skippedCount++;
+            } else if (candidateChannels.putIfAbsent(candidate.getUrl(), candidate) != null) {
+                skippedCount++;
+            }
+        }
+
+        final Map<String, Channel> resolvedChannels = new LinkedHashMap<>();
+        IOException lastResolutionError = null;
+        for (final Channel candidate : candidateChannels.values()) {
+            try {
+                final Channel resolved = resolveStableChannel(candidate);
+                if (resolvedChannels.putIfAbsent(resolved.getUrl(), resolved) != null) {
+                    skippedCount++;
+                }
+            } catch (final IOException e) {
+                skippedCount++;
+                lastResolutionError = e;
+            }
+        }
+
+        if (resolvedChannels.isEmpty()) {
+            if (lastResolutionError != null) {
+                throw lastResolutionError;
+            }
+            throw new InvalidSourceException("No valid YouTube channels found");
+        }
+        return new ResolvedChannelList(new ArrayList<>(resolvedChannels.values()), skippedCount);
+    }
+
+    private static Channel normalizePastedChannelEntry(String value) {
+        if (value.isEmpty() || value.chars().anyMatch(Character::isWhitespace)) {
+            return null;
+        }
+        if (isCanonicalChannelId(value)) {
+            return new Channel(YOUTUBE_ORIGIN + "/channel/" + value, value);
+        }
+        if (value.startsWith("@")) {
+            if (!value.matches("^@[\\p{L}\\p{N}._-]{1,100}$")) {
+                return null;
+            }
+            return new Channel(YOUTUBE_ORIGIN + "/" + value, value.substring(1));
+        }
+
+        String candidate = value;
+        final String lower = value.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("youtube.com/") || lower.startsWith("www.youtube.com/")
+                || lower.startsWith("m.youtube.com/") || lower.startsWith("music.youtube.com/")) {
+            candidate = YOUTUBE_ORIGIN.substring(0, YOUTUBE_ORIGIN.indexOf("://") + 3) + value;
+        } else if (lower.startsWith("http://")) {
+            candidate = "https://" + value.substring("http://".length());
+        }
+        final String url = normalizeChannelUrl(candidate);
+        return url == null ? null : new Channel(url, url);
+    }
+
     public static void clearCache(Context context) {
         getCacheFile(context).delete();
     }
@@ -167,24 +253,29 @@ public final class YouTubeSubscriptionImportHelper {
     public static List<Channel> resolveStableChannels(List<Channel> channels) throws IOException {
         Map<String, Channel> resolvedChannels = new LinkedHashMap<>();
         for (Channel channel : channels) {
-            Uri uri = Uri.parse(channel.getUrl());
-            String path = uri.getPath();
-            if (path == null || path.startsWith("/")) {
-                path = path == null ? "" : path.substring(1);
-            }
-            final String channelId;
-            try {
-                channelId = YoutubeParsingHelper.resolveChannelId(path);
-            } catch (Exception e) {
-                throw new IOException("Stable channel ID resolution failed", e);
-            }
-            if (!isCanonicalChannelId(channelId)) {
-                throw new IOException("Stable channel ID resolution returned an invalid ID");
-            }
-            String stableUrl = YOUTUBE_ORIGIN + "/channel/" + channelId;
-            resolvedChannels.putIfAbsent(stableUrl, new Channel(stableUrl, channel.getName()));
+            final Channel resolved = resolveStableChannel(channel);
+            resolvedChannels.putIfAbsent(resolved.getUrl(), resolved);
         }
         return new ArrayList<>(resolvedChannels.values());
+    }
+
+    private static Channel resolveStableChannel(Channel channel) throws IOException {
+        Uri uri = Uri.parse(channel.getUrl());
+        String path = uri.getPath();
+        if (path == null || path.startsWith("/")) {
+            path = path == null ? "" : path.substring(1);
+        }
+        final String channelId;
+        try {
+            channelId = YoutubeParsingHelper.resolveChannelId(path);
+        } catch (Exception e) {
+            throw new IOException("Stable channel ID resolution failed", e);
+        }
+        if (!isCanonicalChannelId(channelId)) {
+            throw new IOException("Stable channel ID resolution returned an invalid ID");
+        }
+        final String stableUrl = YOUTUBE_ORIGIN + "/channel/" + channelId;
+        return new Channel(stableUrl, sanitizeName(channel.getName(), stableUrl));
     }
 
     public static void clearDefaultYoutubeBrowsingData(Context context,
@@ -325,6 +416,24 @@ public final class YouTubeSubscriptionImportHelper {
             return token;
         } catch (Exception ignored) {
             return null;
+        }
+    }
+
+    public static final class ResolvedChannelList {
+        private final List<Channel> channels;
+        private final int skippedCount;
+
+        private ResolvedChannelList(final List<Channel> channels, final int skippedCount) {
+            this.channels = channels;
+            this.skippedCount = skippedCount;
+        }
+
+        public List<Channel> getChannels() {
+            return channels;
+        }
+
+        public int getSkippedCount() {
+            return skippedCount;
         }
     }
 

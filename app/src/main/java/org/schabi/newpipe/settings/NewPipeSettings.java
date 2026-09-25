@@ -137,6 +137,11 @@ public final class NewPipeSettings {
         return prefs.getBoolean(key, true);
     }
 
+    public static boolean isPersonalizedFeedEnabled(final Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean(
+                context.getString(R.string.enable_personalized_feed_key), true);
+    }
+
     private static boolean showSearchSuggestions(final Context context,
                                                  final SharedPreferences sharedPreferences,
                                                  @StringRes final int key) {
