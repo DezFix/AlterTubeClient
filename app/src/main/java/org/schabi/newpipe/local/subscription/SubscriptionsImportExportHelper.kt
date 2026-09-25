@@ -18,7 +18,7 @@ import org.schabi.newpipe.local.subscription.services.SubscriptionsImportService
 import org.schabi.newpipe.local.subscription.services.SubscriptionsImportService.PREVIOUS_EXPORT_MODE
 import org.schabi.newpipe.streams.io.NoFileManagerSafeGuard
 import org.schabi.newpipe.streams.io.StoredFileHelper
-import org.schabi.newpipe.util.Constants
+import org.schabi.newpipe.util.KEY_SERVICE_ID
 import org.schabi.newpipe.youtube.YouTubeSubscriptionImportHelper
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -65,7 +65,7 @@ class SubscriptionsImportExportHelper(private val fragment: Fragment) {
             Intent(fragment.requireContext(), SubscriptionsImportService::class.java)
                 .putExtra(KEY_MODE, CHANNEL_LIST_MODE)
                 .putExtra(KEY_TEXT, text)
-                .putExtra(Constants.KEY_SERVICE_ID, ServiceList.YouTube.getServiceId())
+                .putExtra(KEY_SERVICE_ID, ServiceList.YouTube.getServiceId())
         )
         return 0
     }
