@@ -103,13 +103,6 @@
     <string name="youtube_subscription_sync_complete">Подписки импортированы: добавлено %1$d, найдено %2$d</string>
     <string name="youtube_subscription_sync_failed">Не удалось синхронизировать подписки YouTube</string>
     <string name="youtube_sync_login_required">Сначала войдите в YouTube</string>
-    <string name="recommended_tab_title">Рекомендуемое</string>
-    <string name="recommended_error">Пока нечего рекомендовать — посмотрите несколько видео</string>
-    <string name="recommended_for_you_title">Для вас</string>
-    <string name="recommended_personalized_summary">На основе истории просмотров и подписок</string>
-    <string name="recommended_non_personalized_summary">Персонализация отключена. Показываем видео из ваших подписок.</string>
-    <string name="recommended_subscriptions_required">Подпишитесь на каналы или импортируйте список каналов, чтобы собрать ленту.</string>
-    <string name="recommended_import_subscriptions">Импорт подписок</string>
     <string name="could_not_load_thumbnails">Не удалось загрузить все миниатюры</string>
     <string name="youtube_signature_deobfuscation_error">Не удалось расшифровать подпись URL у видео</string>
     <string name="controls_background_title">В фоне</string>
@@ -150,7 +143,7 @@
     <string name="enable_search_history_summary">Хранить запросы поиска (локально)</string>
     <string name="enable_watch_history_title">История просмотров</string>
     <string name="enable_personalized_feed_title">Персонализированная лента</string>
-    <string name="enable_personalized_feed_summary">Использовать историю просмотров для рекомендаций и Shorts; подписки всегда учитываются</string>
+    <string name="enable_personalized_feed_summary">Использовать историю просмотров для подбора Shorts; подписки тоже учитываются</string>
     <string name="enable_playback_resume_title">Продолжать воспроизведение</string>
     <string name="enable_playback_resume_summary">Восстанавливать последнюю позицию</string>
     <string name="settings_category_clear_data_title">Очистка данных</string>

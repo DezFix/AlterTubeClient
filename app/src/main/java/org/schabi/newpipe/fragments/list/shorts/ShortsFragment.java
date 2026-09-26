@@ -45,6 +45,7 @@ import org.schabi.newpipe.extractor.StreamingService;
 import org.schabi.newpipe.extractor.linkhandler.ChannelTabs;
 import org.schabi.newpipe.extractor.linkhandler.ListLinkHandler;
 import org.schabi.newpipe.extractor.search.filter.Filter;
+import org.schabi.newpipe.extractor.search.filter.FilterGroup;
 import org.schabi.newpipe.extractor.search.filter.FilterItem;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
@@ -90,13 +91,23 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 public class ShortsFragment extends Fragment {
 
     private static final String[] GENERIC_QUERIES = {
-            "#shorts", "shorts gaming", "shorts music", "shorts technology"
+            "#shorts", "shorts", "shorts trending", "shorts music", "shorts gaming",
+            "shorts technology", "shorts food", "shorts travel", "shorts sport",
+            "shorts cars", "shorts animals", "shorts science", "shorts funny",
+            "shorts news", "shorts dance", "shorts fitness", "shorts diy",
+            "shorts gadgets", "shorts motivation", "shorts recipes"
     };
     private static final float[] PLAYBACK_SPEEDS = {
             0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f
     };
     private static final int MAX_CHANNEL_SOURCES = 24;
     private static final int MAX_SEARCH_SOURCES = 6;
+    private static final int MAX_FRESH_SOURCES = 8;
+    private static final String FRESH_WINDOW_DAY = "past_day";
+    private static final String FRESH_WINDOW_WEEK = "past_week";
+    private static final String FRESH_WINDOW_MONTH = "past_month";
+    private static final String FILTER_VIDEOS_CONTENT = "videos";
+    private static final String FILTER_SHORT_VIDEO = "short_video";
     private static final int MAX_EMPTY_PAGES_PER_SOURCE = 5;
     private static final int MAX_ADVANCE_POLLS = 30;
     private static final long MAX_SHORT_DURATION_SECONDS = 180L;
@@ -993,6 +1004,10 @@ public class ShortsFragment extends Fragment {
                 return fallbackSources(sources, searchKeys, new ArrayList<>());
             }
 
+            // Fresh discovery first: brand new Shorts from topics the user actually watches,
+            // not only uploads of already known channels.
+            addFreshSources(sources, searchKeys, history);
+
             int channelCount = 0;
             int searchCount = 0;
             for (int i = 0; i < history.size()
@@ -1015,7 +1030,13 @@ public class ShortsFragment extends Fragment {
                 final List<SubscriptionEntity> subscriptions =
                         new SubscriptionManager(context).subscriptionTable()
                                 .getAll().blockingFirst(new ArrayList<>());
+                final List<String> subscriptionNames = new ArrayList<>();
                 for (final SubscriptionEntity subscription : subscriptions) {
+                    if (subscription.getServiceId() == ServiceList.YouTube.getServiceId()
+                            && subscription.getName() != null
+                            && !subscription.getName().isEmpty()) {
+                        subscriptionNames.add(subscription.getName());
+                    }
                     if (channelCount >= MAX_CHANNEL_SOURCES) {
                         break;
                     }
@@ -1025,6 +1046,7 @@ public class ShortsFragment extends Fragment {
                         channelCount++;
                     }
                 }
+                addFreshSourcesForNames(sources, searchKeys, subscriptionNames);
             } catch (final Exception ignored) {
             }
 
@@ -1060,6 +1082,7 @@ public class ShortsFragment extends Fragment {
             final Map<String, ShortsFeedSource> sources,
             final Set<String> searchKeys,
             final List<StreamHistoryEntry> history) {
+        addFreshSources(sources, searchKeys, history);
         int searchCount = 0;
         if (sources.size() < 3) {
             for (final String keyword : topTitleKeywords(history, 3)) {
@@ -1073,6 +1096,104 @@ public class ShortsFragment extends Fragment {
             addSearchSource(sources, searchKeys, query, searchCount++);
         }
         return new ArrayList<>(sources.values());
+    }
+
+    /**
+     * Adds search sources restricted to recently uploaded short videos, so the feed is not
+     * limited to the uploads of already known channels.
+     */
+    private void addFreshSources(final Map<String, ShortsFeedSource> sources,
+                                 final Set<String> searchKeys,
+                                 final List<StreamHistoryEntry> history) {
+        int freshCount = 0;
+        final String[] windows = {FRESH_WINDOW_DAY, FRESH_WINDOW_WEEK, FRESH_WINDOW_MONTH};
+        final List<String> queries = new ArrayList<>();
+        for (final String keyword : topTitleKeywords(history, 4)) {
+            queries.add(keyword + " shorts");
+        }
+        for (final String uploader : topUploaderNames(history, 3)) {
+            queries.add(uploader + " shorts");
+        }
+        for (final String query : GENERIC_QUERIES) {
+            queries.add(query);
+        }
+        for (int i = 0; i < queries.size() && freshCount < MAX_FRESH_SOURCES; i++) {
+            if (addFreshSource(sources, searchKeys, queries.get(i),
+                    windows[Math.min(i / 3, windows.length - 1)], freshCount)) {
+                freshCount++;
+            }
+        }
+    }
+
+    private void addFreshSourcesForNames(final Map<String, ShortsFeedSource> sources,
+                                         final Set<String> searchKeys,
+                                         final List<String> names) {
+        int freshCount = countFreshSources(sources);
+        final String[] windows = {FRESH_WINDOW_DAY, FRESH_WINDOW_WEEK, FRESH_WINDOW_MONTH};
+        for (int i = 0; i < names.size() && freshCount < MAX_FRESH_SOURCES; i++) {
+            if (addFreshSource(sources, searchKeys, names.get(i) + " shorts",
+                    windows[Math.min(i / 2, windows.length - 1)], freshCount)) {
+                freshCount++;
+            }
+        }
+    }
+
+    private int countFreshSources(final Map<String, ShortsFeedSource> sources) {
+        int count = 0;
+        for (final ShortsFeedSource source : sources.values()) {
+            if (source.getType() == ShortsFeedSource.Type.FRESH) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean addFreshSource(final Map<String, ShortsFeedSource> sources,
+                                   final Set<String> searchKeys,
+                                   final String rawQuery,
+                                   final String freshnessWindow,
+                                   final int freshCount) {
+        if (freshCount >= MAX_FRESH_SOURCES || rawQuery == null) {
+            return false;
+        }
+        final String query = rawQuery.trim();
+        if (query.isEmpty()) {
+            return false;
+        }
+        final String normalized = query.toLowerCase(Locale.ROOT);
+        if (!searchKeys.add(normalized)) {
+            return false;
+        }
+        searchKeys.add("fresh:" + normalized);
+        if (freshSortFilters(freshnessWindow).isEmpty()) {
+            return false;
+        }
+        sources.put("fresh:" + freshnessWindow + ":" + normalized,
+                ShortsFeedSource.fresh(query, freshnessWindow));
+        return true;
+    }
+
+    private List<String> topUploaderNames(final List<StreamHistoryEntry> history,
+                                          final int limit) {
+        final Map<String, Integer> counts = new LinkedHashMap<>();
+        int scanned = 0;
+        for (int i = 0; i < history.size() && scanned < 40; i++, scanned++) {
+            final StreamEntity stream = history.get(i).getStreamEntity();
+            if (stream.getServiceId() != ServiceList.YouTube.getServiceId()
+                    || stream.getUploader() == null || stream.getUploader().isEmpty()) {
+                continue;
+            }
+            counts.put(stream.getUploader(),
+                    counts.getOrDefault(stream.getUploader(), 0) + 1);
+        }
+        final List<String> result = new ArrayList<>();
+        for (final String name : counts.keySet()) {
+            if (result.size() >= limit) {
+                break;
+            }
+            result.add(name);
+        }
+        return result;
     }
 
     private boolean addChannelSource(final Map<String, ShortsFeedSource> sources,
@@ -1171,7 +1292,8 @@ public class ShortsFragment extends Fragment {
                     });
         } else {
             single = ExtractorHelper.searchFor(ServiceList.YouTube.getServiceId(),
-                            source.getQuery(), allFilter(), Collections.emptyList())
+                            source.getQuery(), contentFilterFor(source),
+                            sortFilterFor(source))
                     .map(info -> {
                         source.setNextPage(info.hasNextPage() ? info.getNextPage() : null);
                         source.setLoaded(true);
@@ -1342,8 +1464,8 @@ public class ShortsFragment extends Fragment {
                     });
         }
         return ExtractorHelper.getMoreSearchItems(
-                        ServiceList.YouTube.getServiceId(), source.getQuery(), allFilter(),
-                        Collections.emptyList(), page)
+                        ServiceList.YouTube.getServiceId(), source.getQuery(),
+                        contentFilterFor(source), sortFilterFor(source), page)
                 .map(info -> {
                     source.setNextPage(info.hasNextPage() ? info.getNextPage() : null);
                     return info.getItems();
@@ -1384,6 +1506,63 @@ public class ShortsFragment extends Fragment {
         } catch (final Exception ignored) {
             return Collections.emptyList();
         }
+    }
+
+    private List<FilterItem> contentFilterFor(final ShortsFeedSource source) {
+        if (source.getType() != ShortsFeedSource.Type.FRESH) {
+            return allFilter();
+        }
+        try {
+            final StreamingService service =
+                    NewPipe.getService(ServiceList.YouTube.getServiceId());
+            for (final FilterGroup group : service.getSearchQHFactory()
+                    .getAvailableContentFilter().getFilterGroups()) {
+                for (final FilterItem item : group.filterItems) {
+                    if (FILTER_VIDEOS_CONTENT.equals(item.getName())) {
+                        return Collections.singletonList(item);
+                    }
+                }
+            }
+        } catch (final Exception ignored) {
+        }
+        return allFilter();
+    }
+
+    private List<FilterItem> sortFilterFor(final ShortsFeedSource source) {
+        if (source.getType() != ShortsFeedSource.Type.FRESH) {
+            return Collections.emptyList();
+        }
+        return freshSortFilters(source.getFreshnessWindow());
+    }
+
+    private List<FilterItem> freshSortFilters(final String freshnessWindow) {
+        if (freshnessWindow == null) {
+            return Collections.emptyList();
+        }
+        final List<FilterItem> filters = new ArrayList<>();
+        try {
+            final StreamingService service =
+                    NewPipe.getService(ServiceList.YouTube.getServiceId());
+            final FilterGroup[] groups = service.getSearchQHFactory()
+                    .getAvailableSortFilter().getFilterGroups();
+            for (final String name : new String[]{freshnessWindow, FILTER_SHORT_VIDEO}) {
+                for (final FilterGroup group : groups) {
+                    boolean found = false;
+                    for (final FilterItem item : group.filterItems) {
+                        if (name.equals(item.getName())) {
+                            if (!found) {
+                                filters.add(item);
+                                found = true;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (final Exception ignored) {
+            return Collections.emptyList();
+        }
+        return filters;
     }
 
     private static final Set<String> TITLE_STOP_WORDS =
