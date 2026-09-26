@@ -47,7 +47,7 @@
     <string name="checksum">Контрольная сумма</string>
     <string name="msg_name">Имя файла</string>
     <string name="msg_error">Ошибка</string>
-    <string name="msg_running">NewPipe загружает</string>
+    <string name="msg_running">AlterTube загружает</string>
     <string name="msg_running_detail">Подробнее</string>
     <string name="msg_copied">Скопировано в буфер обмена</string>
     <string name="no_available_dir">Выберите папку для загрузки позже в настройках</string>
@@ -131,7 +131,7 @@
     <string name="best_resolution">Лучшее разрешение</string>
     <string name="title_activity_recaptcha">Запрос reCAPTCHAe</string>
     <string name="recaptcha_request_toast">Запрошен ввод reCAPTCHA</string>
-    <string name="title_activity_about">О NewPipe</string>
+    <string name="title_activity_about">Об AlterTube</string>
     <string name="app_license_title">Лицензия NewPipe</string>
     <string name="title_licenses">Сторонние лицензии</string>
     <string name="tab_about">О приложении</string>
@@ -157,8 +157,8 @@
     <string name="enable_watch_history_summary">Запоминать воспроизведённые потоки</string>
     <string name="resume_on_audio_focus_gain_title">Возобновить при фокусе</string>
     <string name="resume_on_audio_focus_gain_summary">Возобновлять воспроизведение после перерывов (например, телефонных звонков)</string>
-    <string name="notification_channel_name">Уведомление PipePipe</string>
-    <string name="notification_channel_description">Уведомления для плеера PipePipe</string>
+    <string name="notification_channel_name">Уведомление AlterTube</string>
+    <string name="notification_channel_description">Уведомления для плеера AlterTube</string>
     <string name="settings_category_downloads_title">Загрузки</string>
     <string name="settings_file_charset_title">Допустимые символы имён файлов</string>
 &gt;
@@ -231,9 +231,9 @@
     <string name="video_streams_empty">Видеопотоки не найдены</string>
     <string name="audio_streams_empty">Аудиопотоки не найдены</string>
     <string name="donation_title">Пожертвование</string>
-    <string name="donation_encouragement">Разработчики NewPipe ценой своего свободного времени делают вашу жизнь чуть удобнее. Отплатите им тем же — наслаждаясь чашечкой кофе, они смогут сделать NewPipe ещё круче.</string>
+    <string name="donation_encouragement">Разработчики AlterTube ценой своего свободного времени делают вашу жизнь чуть удобнее. Отплатите им тем же — наслаждаясь чашечкой кофе, они смогут сделать AlterTube ещё круче.</string>
     <string name="website_title">Веб-сайт</string>
-    <string name="website_encouragement">Для получения более подробной информации и последних новостей о NewPipe посетите наш веб-сайт.</string>
+    <string name="website_encouragement">Для получения более подробной информации и последних новостей об AlterTube посетите наш веб-сайт.</string>
     <string name="drawer_open">Открыть боковую панель</string>
     <string name="drawer_close">Закрыть боковую панель</string>
     <string name="video_player">Видеоплеер</string>
@@ -388,10 +388,10 @@
     <string name="settings_category_updates_title">Обновления</string>
     <string name="file_deleted">Файл удалён</string>
     <string name="app_update_notification_channel_name">Уведомление об обновлении приложения</string>
-    <string name="app_update_notification_channel_description">Уведомления о новых версиях NewPipe</string>
+    <string name="app_update_notification_channel_description">Уведомления о новых версиях AlterTube</string>
     <string name="updates_setting_title">Обновления</string>
     <string name="updates_setting_description">Показать уведомление при наличии новой версии</string>
-    <string name="app_update_notification_content_title">Доступно обновление NewPipe!</string>
+    <string name="app_update_notification_content_title">Доступно обновление AlterTube!</string>
     <string name="app_update_notification_content_text">Нажмите, чтобы открыть страницу релиза</string>
     <string name="missions_header_finished">Завершено</string>
     <string name="paused">приостановлено</string>
@@ -719,7 +719,7 @@
     <string name="crash_the_player">Вызвать сбой плеера</string>
     <string name="error_report_channel_name">Отчёты об ошибках</string>
     <string name="error_report_channel_description">Уведомления с предложением отправить отчёт при возникновении ошибок</string>
-    <string name="error_report_notification_title">NewPipe столкнулся с ошибкой, нажмите для отчёта</string>
+    <string name="error_report_notification_title">AlterTube столкнулся с ошибкой, нажмите для отчёта</string>
     <string name="error_report_notification_toast">Произошла ошибка, подробнее в уведомлении</string>
     <string name="show_error_snackbar">Показать ошибку снекбара</string>
     <string name="create_error_notification">Создать уведомление об ошибке</string>
@@ -755,13 +755,13 @@
     </plurals>
     <string name="restricted_video_no_stream_new">Это видео имеет возрастные ограничения.
 Войдите в аккаунт через «Настройки», чтобы посмотреть его.</string>
-    <string name="app_update_notification_channel_description_new">Уведомления о новых версиях PipePipe</string>
-    <string name="clear_cookie_summary_new">Очистить cookies, сохранённые PipePipe при решении reCAPTCHA</string>
-    <string name="error_report_notification_title_new">В PipePipe произошла ошибка. Нажмите, чтобы сообщить о ней</string>
+    <string name="app_update_notification_channel_description_new">Уведомления о новых версиях AlterTube</string>
+    <string name="clear_cookie_summary_new">Очистить cookies, сохранённые AlterTube при решении reCAPTCHA</string>
+    <string name="error_report_notification_title_new">В AlterTube произошла ошибка. Нажмите, чтобы сообщить о ней</string>
     <string name="error_report_open_issue_button_text_new">Сообщить на GitHub</string>
-    <string name="msg_running_new">Загружает PipePipe</string>
-    <string name="title_activity_about_new">О NewPipe</string>
-    <string name="app_description_new">Свободное Android-приложение для удобного и независимого просмотра YouTube, NicoNico и BiliBili </string>
+    <string name="msg_running_new">Загружает AlterTube</string>
+    <string name="title_activity_about_new">Об AlterTube</string>
+    <string name="app_description_new">AlterTube — лёгкий клиент YouTube: лента Shorts в стиле TikTok, без рекламы.</string>
     <string name="app_license_title_new">Лицензия NewPipe (Upstream)</string>
     <string name="duplicate_in_playlist">Серым цветом отмечены плейлисты, в которых этот элемент уже есть.</string>
     <string name="playlist_add_stream_success_duplicate">Добавлено дубликатов: %d</string>
@@ -788,15 +788,15 @@
     <string name="app_update_available_message">Доступна версия %1$s. Откройте страницу релиза на GitHub, чтобы скачать её.</string>
     <string name="app_update_open">Открыть обновление</string>
     <string name="app_update_later">Позже</string>
-    <string name="error_postprocessing_stopped_new">Приложение PipePipe было закрыто во время обработки файла</string>
+    <string name="error_postprocessing_stopped_new">Приложение AlterTube было закрыто во время обработки файла</string>
     <string name="feed_load_error_terminated_new">Аккаунт автора был удалён.
-PipePipe больше не сможет загружать эту подписку.
+AlterTube больше не сможет загружать эту подписку.
 Хотите отписаться от этого канала?</string>
     <string name="feed_use_dedicated_fetch_method_help_text_new">Вам кажется, что лента загружается слишком медленно? Если так, попробуйте включить быструю загрузку (это можно сделать в настройках или нажав кнопку ниже).
 
 
 
-PipePipe предлагает две стратегии загрузки ленты:
+AlterTube предлагает две стратегии загрузки ленты:
 
 • Полная загрузка каналов подписок: работает медленно, но предоставляет полные данные.
 
@@ -901,14 +901,14 @@ PipePipe предлагает две стратегии загрузки лен�
     <string name="sponsor_block_manual_skip_button">Пропустить</string>
     <string name="sponsor_block_show_manual_skip_title">Кнопки ручного управления</string>
     <string name="sponsor_block_show_manual_skip_summary">Показывать на экране кнопки для ручного пропуска или возврата сегментов. Рекомендуется включить, если категории настроены на ручной пропуск.</string>
-    <string name="content_not_supported_new">Этот контент пока не поддерживается в PipePipe.
+    <string name="content_not_supported_new">Этот контент пока не поддерживается в AlterTube.
 
 Надеемся, поддержка появится в будущих версиях.</string>
-    <string name="soundcloud_go_plus_content_new">Этот трек относится к категории SoundCloud Go+ (по крайней мере, в вашей стране), поэтому PipePipe не может его воспроизвести или скачать.</string>
-    <string name="private_content_new">Это приватный контент, поэтому PipePipe не может его воспроизвести или скачать.</string>
-    <string name="youtube_music_premium_content_new">Это видео доступно только для подписчиков YouTube Music Premium, поэтому PipePipe не может его воспроизвести или скачать.</string>
+    <string name="soundcloud_go_plus_content_new">Этот трек относится к категории SoundCloud Go+ (по крайней мере, в вашей стране), поэтому AlterTube не может его воспроизвести или скачать.</string>
+    <string name="private_content_new">Это приватный контент, поэтому AlterTube не может его воспроизвести или скачать.</string>
+    <string name="youtube_music_premium_content_new">Это видео доступно только для подписчиков YouTube Music Premium, поэтому AlterTube не может его воспроизвести или скачать.</string>
     <string name="live_not_started">Трансляция ещё не началась.</string>
-    <string name="paid_content_new">Это платный контент, поэтому PipePipe не может его воспроизвести или скачать.</string>
+    <string name="paid_content_new">Это платный контент, поэтому AlterTube не может его воспроизвести или скачать.</string>
     <string name="metadata_subscribers">Подписчики</string>
     <string name="remove_duplicates">Удалить дубликаты</string>
     <string name="remove_duplicates_popup_title">Удалить дубликаты?</string>
@@ -1030,14 +1030,14 @@ PipePipe предлагает две стратегии загрузки лен�
     <string name="random_play_order_title">Случайный порядок</string>
     <string name="random_play_order_summary">Автоматически перемешивать локальные плейлисты при воспроизведении в фоне</string>
     <string name="speeding_playback_title">Долгое нажатие для ускорения</string>
-    <string name="donation_dialog_title">Нравится PipePipe?</string>
+    <string name="donation_dialog_title">Нравится AlterTube?</string>
     <string name="donation_dialog_message">Поддержите нас на Ko-fi, чтобы просмотр видео оставался открытым и свободным от слежки.</string>
     <string name="fullscreen_gesture_control_summary">Использовать жесты для входа и выхода из полноэкранного режима</string>
     <string name="fullscreen_gesture_control_title">Управление полноэкранным режимом</string>
-    <string name="require_audio_focus_summary">Воспроизводить звук только в PipePipe</string>
+    <string name="require_audio_focus_summary">Воспроизводить звук только в AlterTube</string>
     <string name="require_audio_focus_title">Запрашивать аудиофокус</string>
     <string name="decoder_init_failure">Ошибка инициализации декодера</string>
-    <string name="unable_to_decode_summary">Ваше устройство не поддерживает необходимые аппаратные декодеры, поэтому PipePipe не может воспроизвести это видео.
+    <string name="unable_to_decode_summary">Ваше устройство не поддерживает необходимые аппаратные декодеры, поэтому AlterTube не может воспроизвести это видео.
 Пожалуйста, скачайте его и откройте через сторонний плеер (например, VLC).</string>
     <string name="settings_category_gestures_summary">Настройки жестов</string>
     <string name="settings_category_bullet_comments_summary">Настройки комментариев над видео</string>

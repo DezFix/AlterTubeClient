@@ -214,8 +214,6 @@ public class MainActivity extends AppCompatActivity {
 
         int currentVersionCode = BuildConfig.VERSION_CODE;
         int storedVersionCode = prefs.getInt("version_code", 0);
-        long lastShowDonationTime = prefs.getLong("last_show_donation_time", 0);
-        long currentTime = System.currentTimeMillis();
 
         final boolean isFreshInstall = storedVersionCode == 0;
         if (!isFreshInstall && currentVersionCode > storedVersionCode + 90) {
@@ -223,33 +221,9 @@ public class MainActivity extends AppCompatActivity {
             builder.setTitle(R.string.fragment_feed_title);
             builder.setMessage(R.string.update_log);
             builder.setPositiveButton(R.string.ok, null);
-
-            AlertDialog.Builder builder2 = new AlertDialog.Builder(this);
-            builder2.setTitle(R.string.donation_dialog_title);
-            builder2.setMessage(R.string.donation_dialog_message);
-
-            builder2.setPositiveButton(R.string.sponsor_promote, (dialog, which) -> {
-                ShareUtils.openUrlInBrowser(this, getString(R.string.donation_url));
-            });
-            builder2.setNegativeButton(R.string.no, null);
-
-            final AlertDialog dialog2 = builder2.create();
-
-            final AlertDialog dialog1 = builder.create();
-            dialog1.setOnDismissListener(new DialogInterface.OnDismissListener() {
-                @Override
-                public void onDismiss(DialogInterface dialog) {
-                    if((storedVersionCode / 100 < 1107 && currentTime - lastShowDonationTime > 14 * 24 * 60 * 60 * 1000)
-                            || currentTime - lastShowDonationTime > 30L * 24 * 60 * 60 * 1000) {
-                        prefs.edit().putLong("last_show_donation_time", currentTime).apply();
-                        dialog2.show();
-                    }
-                }
-            });
-
-            dialog1.show();
+            builder.show();
         }
-        // On fresh install just remember the version: no changelog or donation popups in face.
+        // On fresh install just remember the version: no changelog popup in face.
         prefs.edit().putInt("version_code", currentVersionCode).apply();
         // TODO(AlterTube): own announcements (e.g. via GitHub releases) — upstream wiki removed.
     }
