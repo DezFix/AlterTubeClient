@@ -50,6 +50,7 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.preference.PreferenceManager;
+import androidx.lifecycle.Lifecycle;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
@@ -508,7 +509,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showPendingUpdateDialog() {
-        if (!isResumed() || isFinishing() || isDestroyed() || updateDialog != null) {
+        if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)
+                || isFinishing() || isDestroyed() || updateDialog != null) {
             return;
         }
         final NewVersionWorker.PendingUpdate pendingUpdate =
