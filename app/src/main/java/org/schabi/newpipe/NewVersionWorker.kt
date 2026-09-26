@@ -68,7 +68,7 @@ class NewVersionWorker(
     private fun checkNewVersion() {
         val manual = inputData.getBoolean(IS_MANUAL, false)
         if (!manual) {
-            if (!isAutomaticCheckEnabled()) {
+            if (!isAutomaticCheckEnabled(applicationContext)) {
                 return
             }
             val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
