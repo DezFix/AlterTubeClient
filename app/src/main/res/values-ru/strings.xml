@@ -73,6 +73,7 @@
     <string name="audio">Аудио</string>
     <string name="retry">Повтор</string>
     <string name="shorts_tab_title">Shorts</string>
+    <string name="shorts_open_player">Открыть Shorts</string>
     <string name="shorts_error_loading">Не удалось загрузить Shorts</string>
     <string name="shorts_mute">Звук вкл/выкл</string>
     <string name="shorts_autoadvance">Автопереход к следующему Short</string>
@@ -391,7 +392,7 @@
     <string name="updates_setting_title">Обновления</string>
     <string name="updates_setting_description">Показать уведомление при наличии новой версии</string>
     <string name="app_update_notification_content_title">Доступно обновление NewPipe!</string>
-    <string name="app_update_notification_content_text">Нажмите для загрузки</string>
+    <string name="app_update_notification_content_text">Нажмите, чтобы открыть страницу релиза</string>
     <string name="missions_header_finished">Завершено</string>
     <string name="paused">приостановлено</string>
     <string name="queued">в очереди</string>
@@ -781,8 +782,12 @@
     </string-array>
     <string name="large_grid">Крупная сетка</string>
     <string name="card">Карточки</string>
-    <string name="app_update_unavailable_toast">У вас установлена последняя версия PipePipe</string>
-    <string name="app_update_notification_content_title_new">Доступно обновление PipePipe!</string>
+    <string name="app_update_unavailable_toast">Установлена последняя версия AlterTube</string>
+    <string name="app_update_notification_content_title_new">Доступно обновление AlterTube!</string>
+    <string name="app_update_available_title">Доступно обновление AlterTube</string>
+    <string name="app_update_available_message">Доступна версия %1$s. Откройте страницу релиза на GitHub, чтобы скачать её.</string>
+    <string name="app_update_open">Открыть обновление</string>
+    <string name="app_update_later">Позже</string>
     <string name="error_postprocessing_stopped_new">Приложение PipePipe было закрыто во время обработки файла</string>
     <string name="feed_load_error_terminated_new">Аккаунт автора был удалён.
 PipePipe больше не сможет загружать эту подписку.

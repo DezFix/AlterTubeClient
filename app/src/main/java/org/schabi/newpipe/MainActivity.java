@@ -50,6 +50,7 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.preference.PreferenceManager;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 
@@ -96,6 +97,15 @@ public class MainActivity extends AppCompatActivity {
     private boolean servicesShown = false;
 
     private BroadcastReceiver broadcastReceiver;
+    private boolean playerStartReceiverRegistered;
+    private AlertDialog updateDialog;
+    private boolean updateReceiverRegistered;
+    private final BroadcastReceiver updateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(final Context context, final Intent intent) {
+            showPendingUpdateDialog();
+        }
+    };
 
     private static final int ITEM_ID_SUBSCRIPTIONS = -1;
     private static final int ITEM_ID_FEED = -2;
@@ -145,6 +155,10 @@ public class MainActivity extends AppCompatActivity {
                 .getHeaderView(0));
         toolbarLayoutBinding = mainBinding.toolbarLayout;
         setContentView(mainBinding.getRoot());
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+                updateReceiver,
+                new IntentFilter(NewVersionWorker.UPDATE_AVAILABLE_ACTION));
+        updateReceiverRegistered = true;
 
         if (getSupportFragmentManager().getBackStackEntryCount() == 0) {
             initFragments();
@@ -159,11 +173,25 @@ public class MainActivity extends AppCompatActivity {
         if (DeviceUtils.isTv(this)) {
             FocusOverlayView.setupFocusObserver(this);
         }
-        openMiniPlayerUponPlayerStarted();
-
         // Schedule worker for checking for new streams and creating corresponding notifications
         // if this is enabled by the user.
         NotificationWorker.initialize(this);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        openMiniPlayerUponPlayerStarted();
+    }
+
+    @Override
+    protected void onStop() {
+        if (playerStartReceiverRegistered && broadcastReceiver != null) {
+            unregisterReceiver(broadcastReceiver);
+            broadcastReceiver = null;
+            playerStartReceiverRegistered = false;
+        }
+        super.onStop();
     }
 
     @Override
@@ -182,12 +210,6 @@ public class MainActivity extends AppCompatActivity {
         if (!Arrays.asList("original", "en", "fr", "de", "es", "pt", "ru", "tr", "zh", "ja", "hi", "ko", "th", "vi", "bn", "id", "ar").contains(audioLang)) {
             prefs.edit().putString(getString(R.string.preferred_audio_language_key), "original").apply();
         } // remove this after sometime
-
-        if (prefs.getBoolean(app.getString(R.string.update_app_key), false)) {
-            // Start the worker which is checking all conditions
-            // and eventually searching for a new version.
-                NewVersionWorker.enqueueNewVersionCheckingWork(app, false);
-        }
 
         int currentVersionCode = BuildConfig.VERSION_CODE;
         int storedVersionCode = prefs.getInt("version_code", 0);
@@ -415,12 +437,22 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (updateReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(updateReceiver);
+            updateReceiverRegistered = false;
+        }
+        if (updateDialog != null) {
+            updateDialog.dismiss();
+            updateDialog = null;
+        }
+        if (playerStartReceiverRegistered && broadcastReceiver != null) {
+            unregisterReceiver(broadcastReceiver);
+            broadcastReceiver = null;
+            playerStartReceiverRegistered = false;
+        }
         super.onDestroy();
         if (!isChangingConfigurations()) {
             StateSaver.clearStateFiles();
-        }
-        if (broadcastReceiver != null) {
-            unregisterReceiver(broadcastReceiver);
         }
     }
 
@@ -472,6 +504,32 @@ public class MainActivity extends AppCompatActivity {
                 getString(R.string.enable_watch_history_key), true);
         drawerLayoutBinding.navigation.getMenu().findItem(ITEM_ID_HISTORY)
                 .setVisible(isHistoryEnabled);
+        showPendingUpdateDialog();
+    }
+
+    private void showPendingUpdateDialog() {
+        if (!isResumed() || isFinishing() || isDestroyed() || updateDialog != null) {
+            return;
+        }
+        final NewVersionWorker.PendingUpdate pendingUpdate =
+                NewVersionWorker.consumePendingUpdate(this);
+        if (pendingUpdate == null) {
+            return;
+        }
+        updateDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.app_update_available_title)
+                .setMessage(getString(R.string.app_update_available_message,
+                        pendingUpdate.getVersion()))
+                .setPositiveButton(R.string.app_update_open, (dialog, which) -> {
+                    NewVersionWorker.clearPendingUpdate(this);
+                    ShareUtils.openUrlInBrowser(this, pendingUpdate.getUrl());
+                })
+                .setNegativeButton(R.string.app_update_later, (dialog, which) ->
+                        NewVersionWorker.clearPendingUpdate(this))
+                .create();
+        updateDialog.setOnCancelListener(dialog -> NewVersionWorker.clearPendingUpdate(this));
+        updateDialog.setOnDismissListener(dialog -> updateDialog = null);
+        updateDialog.show();
     }
 
     @Override
@@ -742,7 +800,7 @@ public class MainActivity extends AppCompatActivity {
                         final boolean switchingPlayers = intent.getBooleanExtra(
                                 VideoDetailFragment.KEY_SWITCHING_PLAYERS, false);
                         NavigationHelper.openVideoDetailFragment(
-                                getApplicationContext(), getSupportFragmentManager(),
+                                this, getSupportFragmentManager(),
                                 serviceId, url, title, playQueue, switchingPlayers);
                         break;
                     case CHANNEL:
@@ -774,50 +832,51 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openMiniPlayerIfMissing() {
+        if (isFinishing() || isDestroyed() || mainBinding == null) {
+            return;
+        }
         final Fragment fragmentPlayer = getSupportFragmentManager()
                 .findFragmentById(R.id.fragment_player_holder);
         if (fragmentPlayer == null) {
-            // We still don't have a fragment attached to the activity. It can happen when a user
-            // started popup or background players without opening a stream inside the fragment.
-            // Adding it in a collapsed state (only mini player will be visible).
-            NavigationHelper.showMiniPlayer(getSupportFragmentManager());
+            NavigationHelper.showMiniPlayer(this);
         }
     }
 
     private void openMiniPlayerUponPlayerStarted() {
         if (getIntent().getSerializableExtra(Constants.KEY_LINK_TYPE)
                 == StreamingService.LinkType.STREAM) {
-            // handleIntent() already takes care of opening video detail fragment
-            // due to an intent containing a STREAM link
+            return;
+        }
+        if (playerStartReceiverRegistered) {
             return;
         }
 
         if (PlayerHolder.getInstance().isPlayerOpen()) {
-            // if the player is already open, no need for a broadcast receiver
             openMiniPlayerIfMissing();
-        } else {
-            // listen for player start intent being sent around
-            broadcastReceiver = new BroadcastReceiver() {
-                @Override
-                public void onReceive(final Context context, final Intent intent) {
-                    if (Objects.equals(intent.getAction(),
-                            VideoDetailFragment.ACTION_PLAYER_STARTED)) {
-                        openMiniPlayerIfMissing();
-                        // At this point the player is added 100%, we can unregister. Other actions
-                        // are useless since the fragment will not be removed after that.
+            return;
+        }
+        broadcastReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(final Context context, final Intent intent) {
+                if (Objects.equals(intent.getAction(), VideoDetailFragment.ACTION_PLAYER_STARTED)) {
+                    openMiniPlayerIfMissing();
+                    if (getSupportFragmentManager().findFragmentById(
+                            R.id.fragment_player_holder) != null) {
                         unregisterReceiver(broadcastReceiver);
                         broadcastReceiver = null;
+                        playerStartReceiverRegistered = false;
                     }
                 }
-            };
-            final IntentFilter intentFilter = new IntentFilter();
-            intentFilter.addAction(VideoDetailFragment.ACTION_PLAYER_STARTED);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(broadcastReceiver, intentFilter, Context.RECEIVER_EXPORTED);
-            } else {
-                registerReceiver(broadcastReceiver, intentFilter);
             }
+        };
+        final IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(VideoDetailFragment.ACTION_PLAYER_STARTED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(broadcastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(broadcastReceiver, intentFilter);
         }
+        playerStartReceiverRegistered = true;
     }
 
     private boolean bottomSheetHiddenOrCollapsed() {

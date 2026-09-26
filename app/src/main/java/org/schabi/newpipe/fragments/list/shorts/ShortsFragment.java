@@ -97,6 +97,8 @@ public class ShortsFragment extends Fragment {
     };
     private static final int MAX_CHANNEL_SOURCES = 24;
     private static final int MAX_SEARCH_SOURCES = 6;
+    private static final int MAX_EMPTY_PAGES_PER_SOURCE = 5;
+    private static final int MAX_ADVANCE_POLLS = 30;
     private static final long MAX_SHORT_DURATION_SECONDS = 180L;
     private static final int PREFETCH_TAIL = 3;
     private static final int MAX_CACHED_STREAM_INFOS = 12;
@@ -148,6 +150,7 @@ public class ShortsFragment extends Fragment {
     private boolean zoom;
     private boolean autoAdvance;
     private boolean feedPageRetry;
+    private int advancePollAttempts;
     private boolean lastPersonalizedFeedSetting;
     private float playbackSpeed = 1f;
     private String selectedResolution;
@@ -889,8 +892,8 @@ public class ShortsFragment extends Fragment {
         playbackToken = -1;
         stopProgressUpdates();
         stopAdvanceRunnable();
-        disposables.clear();
         savePlaybackState();
+        disposables.clear();
         binding.shortsPlayerView.setPlayer(null);
         if (audioReactor != null) {
             audioReactor.dispose();
@@ -1187,9 +1190,16 @@ public class ShortsFragment extends Fragment {
         applySourceMetadata(source, items);
         final List<StreamInfoItem> shorts = filterShorts(items);
         if (!shorts.isEmpty()) {
+            source.resetEmptyPageCount();
             loadingMore = false;
             binding.shortsLoading.setVisibility(View.GONE);
             appendOrReplaceItems(shorts, replace);
+            return;
+        }
+        source.incrementEmptyPageCount();
+        if (source.getEmptyPageCount() >= MAX_EMPTY_PAGES_PER_SOURCE) {
+            source.setNextPage(null);
+            moveToNextSource(index, generation, replace);
             return;
         }
         final Page nextPage = source.getNextPage();
@@ -1294,13 +1304,20 @@ public class ShortsFragment extends Fragment {
                     applySourceMetadata(source, items);
                     final List<StreamInfoItem> shorts = filterShorts(items);
                     if (!shorts.isEmpty()) {
+                        source.resetEmptyPageCount();
                         adapter.addItems(shorts);
                         feedModel.appendItems(shorts);
-                    } else if (source.getNextPage() == null
-                            && sourceIndex + 1 < feedModel.getSources().size()) {
-                        advanceSource();
-                    } else if (source.getNextPage() != null) {
-                        loadMore();
+                    } else {
+                        source.incrementEmptyPageCount();
+                        if (source.getEmptyPageCount() >= MAX_EMPTY_PAGES_PER_SOURCE) {
+                            source.setNextPage(null);
+                        }
+                        if (source.getNextPage() == null
+                                && sourceIndex + 1 < feedModel.getSources().size()) {
+                            advanceSource();
+                        } else if (source.getNextPage() != null) {
+                            loadMore();
+                        }
                     }
                 }, throwable -> {
                     if (binding == null || generation != feedGeneration) {
@@ -1851,6 +1868,7 @@ public class ShortsFragment extends Fragment {
 
     private void advanceAfterEnd() {
         stopAdvanceRunnable();
+        advancePollAttempts = 0;
         if (binding == null || adapter == null) {
             return;
         }
@@ -1866,6 +1884,11 @@ public class ShortsFragment extends Fragment {
             public void run() {
                 if (binding == null || endedPosition != currentPosition
                         || generation != feedGeneration || token != resolveToken) {
+                    return;
+                }
+                advancePollAttempts++;
+                if (advancePollAttempts >= MAX_ADVANCE_POLLS) {
+                    stopAdvanceRunnable();
                     return;
                 }
                 if (endedPosition + 1 < adapter.getItemCount()) {

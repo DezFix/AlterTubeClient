@@ -81,6 +81,7 @@ public class RecommendedFragment extends Fragment {
         }
     };
     private boolean subscriptionImportReceiverRegistered;
+    private boolean initialLoadStarted;
     private SerialDisposable loadDisposable = new SerialDisposable();
     private Boolean lastPersonalizedSetting;
 
@@ -136,9 +137,8 @@ public class RecommendedFragment extends Fragment {
         binding.recommendedRetryButton.setOnClickListener(v -> load());
         binding.recommendedImportButton.setOnClickListener(v ->
                 NavigationHelper.openSubscriptionsImportFragment(
-                        requireActivity().getSupportFragmentManager(),
-                        ServiceList.YouTube.getServiceId()));
-        load();
+                         requireActivity().getSupportFragmentManager(),
+                         ServiceList.YouTube.getServiceId()));
     }
 
     @Override
@@ -165,15 +165,21 @@ public class RecommendedFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if (binding != null) {
-            final Context context = requireContext().getApplicationContext();
-            if (SubscriptionsImportService.consumePendingImportCompletion(context)) {
-                load(true);
-            } else {
-                final boolean personalized = NewPipeSettings.isPersonalizedFeedEnabled(context);
-                if (lastPersonalizedSetting == null || lastPersonalizedSetting != personalized) {
-                    load();
-                }
+        if (binding == null) {
+            return;
+        }
+        final Context context = requireContext().getApplicationContext();
+        if (!initialLoadStarted) {
+            initialLoadStarted = true;
+            load(SubscriptionsImportService.consumePendingImportCompletion(context));
+            return;
+        }
+        if (SubscriptionsImportService.consumePendingImportCompletion(context)) {
+            load(true);
+        } else {
+            final boolean personalized = NewPipeSettings.isPersonalizedFeedEnabled(context);
+            if (lastPersonalizedSetting == null || lastPersonalizedSetting != personalized) {
+                load();
             }
         }
     }
@@ -182,6 +188,7 @@ public class RecommendedFragment extends Fragment {
     public void onDestroyView() {
         super.onDestroyView();
         loadDisposable.dispose();
+        initialLoadStarted = false;
         binding.recommendedList.setAdapter(null);
         binding = null;
     }

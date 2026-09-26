@@ -766,7 +766,7 @@ public abstract class Tab {
 
         @Override
         public Fragment getFragment(final Context context) {
-            return new BlankFragment();
+            return BlankFragment.newShortsPlaceholder();
         }
     }
 

@@ -5,6 +5,7 @@ import static org.schabi.newpipe.util.external_communication.ShareUtils.installA
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -16,6 +17,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
@@ -358,19 +360,61 @@ public final class NavigationHelper {
     }
 
     public static void expandMainPlayer(final Context context) {
-        context.sendBroadcast(new Intent(VideoDetailFragment.ACTION_SHOW_MAIN_PLAYER));
+        context.sendBroadcast(new Intent(VideoDetailFragment.ACTION_SHOW_MAIN_PLAYER)
+                .setPackage(context.getPackageName()));
     }
 
     public static void sendPlayerStartedEvent(final Context context) {
-        context.sendBroadcast(new Intent(VideoDetailFragment.ACTION_PLAYER_STARTED));
+        context.sendBroadcast(new Intent(VideoDetailFragment.ACTION_PLAYER_STARTED)
+                .setPackage(context.getPackageName()));
     }
 
-    public static void showMiniPlayer(final FragmentManager fragmentManager) {
+    public static void showMiniPlayer(final AppCompatActivity activity) {
+        final FragmentManager fragmentManager = activity.getSupportFragmentManager();
+        if (!isPlayerHolderAvailable(activity, fragmentManager)) {
+            return;
+        }
+        final Fragment existing = fragmentManager.findFragmentById(R.id.fragment_player_holder);
+        if (existing instanceof VideoDetailFragment && existing.isAdded()
+                && !existing.isRemoving()) {
+            return;
+        }
         final VideoDetailFragment instance = VideoDetailFragment.getInstanceInCollapsedState();
         defaultTransaction(fragmentManager)
                 .replace(R.id.fragment_player_holder, instance)
-                .runOnCommit(() -> sendPlayerStartedEvent(instance.requireActivity()))
-                .commitAllowingStateLoss();
+                .runOnCommit(() -> {
+                    if (instance.isAdded() && instance.getActivity() != null
+                            && instance.getView() != null) {
+                        sendPlayerStartedEvent(instance.requireActivity());
+                    }
+                })
+                .commit();
+    }
+
+    private static FragmentActivity findActivity(final Context context) {
+        Context current = context;
+        while (current instanceof ContextWrapper) {
+            if (current instanceof FragmentActivity) {
+                return (FragmentActivity) current;
+            }
+            final Context base = ((ContextWrapper) current).getBaseContext();
+            if (base == current) {
+                break;
+            }
+            current = base;
+        }
+        return current instanceof FragmentActivity ? (FragmentActivity) current : null;
+    }
+
+    private static boolean isPlayerHolderAvailable(final Context context,
+                                                     final FragmentManager fragmentManager) {
+        final FragmentActivity activity = findActivity(context);
+        return activity != null
+                && !activity.isFinishing()
+                && !activity.isDestroyed()
+                && !fragmentManager.isDestroyed()
+                && !fragmentManager.isStateSaved()
+                && activity.findViewById(R.id.fragment_player_holder) != null;
     }
 
     private interface RunnableWithVideoDetailFragment {
@@ -384,6 +428,14 @@ public final class NavigationHelper {
                                                @NonNull final String title,
                                                @Nullable final PlayQueue playQueue,
                                                final boolean switchingPlayers) {
+        final FragmentActivity activity = findActivity(context);
+        if (activity == null) {
+            return;
+        }
+        final FragmentManager playerFragmentManager = activity.getSupportFragmentManager();
+        if (!isPlayerHolderAvailable(activity, playerFragmentManager)) {
+            return;
+        }
 
         final boolean autoPlay;
         @Nullable final PlayerService.PlayerType playerType = PlayerHolder.getInstance().getType();
@@ -403,6 +455,10 @@ public final class NavigationHelper {
 
         final RunnableWithVideoDetailFragment onVideoDetailFragmentReady = (detailFragment,
                                                                             loadVideo) -> {
+            if (!detailFragment.isAdded() || detailFragment.getActivity() == null
+                    || detailFragment.getView() == null) {
+                return;
+            }
             expandMainPlayer(detailFragment.requireActivity());
             detailFragment.setAutoPlay(autoPlay);
             if (switchingPlayers) {
@@ -417,15 +473,17 @@ public final class NavigationHelper {
             detailFragment.scrollToTop();
         };
 
-        final Fragment fragment = fragmentManager.findFragmentById(R.id.fragment_player_holder);
-        if (fragment instanceof VideoDetailFragment && fragment.isVisible()) {
+        final Fragment fragment = playerFragmentManager
+                .findFragmentById(R.id.fragment_player_holder);
+        if (fragment instanceof VideoDetailFragment && fragment.isAdded()
+                && !fragment.isRemoving()) {
             onVideoDetailFragmentReady.run((VideoDetailFragment) fragment, true);
         } else {
             final VideoDetailFragment instance = VideoDetailFragment
                     .getInstance(serviceId, url, title, playQueue);
             instance.setAutoPlay(autoPlay);
 
-            defaultTransaction(fragmentManager)
+            defaultTransaction(playerFragmentManager)
                     .replace(R.id.fragment_player_holder, instance)
                     .runOnCommit(() -> onVideoDetailFragmentReady.run(instance, false))
                     .commit();

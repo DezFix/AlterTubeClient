@@ -5,13 +5,13 @@ import androidx.lifecycle.ViewModel;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 public class ShortsFeedViewModel extends ViewModel {
     private final List<StreamInfoItem> items = new ArrayList<>();
-    private final Map<Integer, Long> playbackPositions = new HashMap<>();
+    private final Map<Integer, Long> playbackPositions = new LinkedHashMap<>();
     private List<ShortsFeedSource> sources = new ArrayList<>();
     private int sourceIndex;
     private int position;
@@ -66,7 +66,12 @@ public class ShortsFeedViewModel extends ViewModel {
 
     public void setPlaybackPosition(final int itemPosition, final long playbackPosition) {
         if (itemPosition >= 0) {
+            playbackPositions.remove(itemPosition);
             playbackPositions.put(itemPosition, Math.max(0L, playbackPosition));
+            while (playbackPositions.size() > 100) {
+                final Integer oldest = playbackPositions.keySet().iterator().next();
+                playbackPositions.remove(oldest);
+            }
         }
     }
 

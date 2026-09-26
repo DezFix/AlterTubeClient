@@ -14,6 +14,7 @@ public class UpdateSettingsFragment extends BasePreferenceFragment {
         defaultPreferences.edit()
                 .putBoolean(getString(R.string.update_app_key), (boolean) checkForUpdates).apply();
 
+        NewVersionWorker.initializePeriodicChecks(requireContext());
         if ((boolean) checkForUpdates) {
             NewVersionWorker.enqueueNewVersionCheckingWork(requireContext(), true);
         }

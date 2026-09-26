@@ -142,6 +142,7 @@ public class App extends MultiDexApplication {
 
         StateSaver.init(this);
         initNotificationChannels();
+        NewVersionWorker.initializePeriodicChecks(this);
 
         ServiceHelper.initServices(this);
         LocalDomPoTokenProvider.initialize(this);

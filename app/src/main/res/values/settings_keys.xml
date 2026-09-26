@@ -468,6 +468,9 @@
     <string name="manual_update_key">manual_update_key</string>
     <string name="update_pref_screen_key">update_pref_screen_key</string>
     <string name="update_expiry_key">update_expiry_key</string>
+    <string name="update_pending_version_key">update_pending_version</string>
+    <string name="update_pending_url_key">update_pending_url</string>
+    <string name="update_last_notified_version_key">update_last_notified_version</string>
 
 
     <!-- SponsorBlock -->

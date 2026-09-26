@@ -18,6 +18,7 @@ public final class ShortsFeedSource implements Serializable {
     private final String channelUrl;
     private Page nextPage;
     private boolean loaded;
+    private int emptyPageCount;
 
     private ShortsFeedSource(final Type type,
                              final ListLinkHandler channelHandler,
@@ -76,5 +77,17 @@ public final class ShortsFeedSource implements Serializable {
 
     public void setLoaded(final boolean loaded) {
         this.loaded = loaded;
+    }
+
+    public int getEmptyPageCount() {
+        return emptyPageCount;
+    }
+
+    public void incrementEmptyPageCount() {
+        emptyPageCount++;
+    }
+
+    public void resetEmptyPageCount() {
+        emptyPageCount = 0;
     }
 }

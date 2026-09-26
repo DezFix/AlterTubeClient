@@ -134,6 +134,22 @@ public class YouTubeLoginWebViewActivity extends BaseLoginWebViewActivity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        if (!webViewDestroyed && webView != null) {
+            webView.onResume();
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        if (!webViewDestroyed && webView != null) {
+            webView.onPause();
+        }
+        super.onStop();
+    }
+
+    @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         ioExecutor.shutdownNow();

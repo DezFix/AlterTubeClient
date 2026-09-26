@@ -262,8 +262,9 @@
 <string name="video">Video</string>
 <string name="audio">Audio</string>
     <string name="retry">Retry</string>
-    <string name="shorts_tab_title">Shorts</string>
-    <string name="shorts_error_loading">Couldn\'t load Shorts</string>
+<string name="shorts_tab_title">Shorts</string>
+<string name="shorts_open_player">Open Shorts</string>
+<string name="shorts_error_loading">Couldn\'t load Shorts</string>
     <string name="shorts_mute">Sound on/off</string>
     <string name="shorts_autoadvance">Auto-advance to next Short</string>
     <string name="shorts_play_pause">Play / pause</string>
@@ -581,7 +582,11 @@
 <!-- App update notification -->
 <string name="app_update_unavailable_toast">You are running the latest version of AlterTube</string>
 <string name="app_update_notification_content_title_new">AlterTube update is available!</string>
-<string name="app_update_notification_content_text">Tap to download</string>
+<string name="app_update_notification_content_text">Tap to open the release page</string>
+<string name="app_update_available_title">AlterTube update available</string>
+<string name="app_update_available_message">Version %1$s is available. Open the GitHub release page to download it.</string>
+<string name="app_update_open">Open update</string>
+<string name="app_update_later">Later</string>
 <string name="missions_header_finished">Finished</string>
 <string name="missions_header_pending">Pending</string>
 <string name="paused">paused</string>

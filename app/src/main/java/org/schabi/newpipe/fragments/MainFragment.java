@@ -67,15 +67,23 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
     private int lastNonShortsPosition = -1;
     private boolean shortsActivityLaunchPending;
     private boolean shortsActivityLaunched;
+    private boolean userSwipedPager;
+    private boolean configuringTabs;
 
     private final ViewPager.OnPageChangeListener mainPagerListener =
             new ViewPager.SimpleOnPageChangeListener() {
                 @Override
                 public void onPageSelected(final int position) {
-                    if (isShortsPosition(position)) {
-                        launchShortsPlayer();
-                    } else if (position >= 0 && position < tabsList.size()) {
+                    if (!isShortsPosition(position) && position >= 0 && position < tabsList.size()) {
                         lastNonShortsPosition = position;
+                        userSwipedPager = false;
+                    }
+                }
+
+                @Override
+                public void onPageScrollStateChanged(final int state) {
+                    if (state == ViewPager.SCROLL_STATE_DRAGGING) {
+                        userSwipedPager = true;
                     }
                 }
             };
@@ -155,14 +163,11 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
             setupTabs();
         }
 
-        if (binding != null && isShortsPosition(binding.pager.getCurrentItem())) {
-            if (returningFromShortsPlayer) {
-                final int fallbackPosition = getFallbackPosition();
-                if (fallbackPosition >= 0) {
-                    binding.pager.setCurrentItem(fallbackPosition, false);
-                }
-            } else {
-                binding.pager.post(this::launchShortsPlayer);
+        if (binding != null && returningFromShortsPlayer
+                && isShortsPosition(binding.pager.getCurrentItem())) {
+            final int fallbackPosition = getFallbackPosition();
+            if (fallbackPosition >= 0) {
+                binding.pager.setCurrentItem(fallbackPosition, false);
             }
         }
 
@@ -174,14 +179,22 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
     }
 
     @Override
-    public void onDestroy() {
-        super.onDestroy();
-        tabsManager.unsetSavedTabsListener();
+    public void onDestroyView() {
         if (binding != null) {
             binding.pager.removeOnPageChangeListener(mainPagerListener);
-            binding.pager.setAdapter(null);
+            if (!getChildFragmentManager().isDestroyed()) {
+                binding.pager.setAdapter(null);
+            }
+            pagerAdapter = null;
             binding = null;
         }
+        super.onDestroyView();
+    }
+
+    @Override
+    public void onDestroy() {
+        tabsManager.unsetSavedTabsListener();
+        super.onDestroy();
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -233,8 +246,9 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
                     getChildFragmentManager(), tabsList);
         }
 
+        configuringTabs = true;
         binding.pager.setAdapter(null);
-        binding.pager.setOffscreenPageLimit(tabsList.size());
+        binding.pager.setOffscreenPageLimit(1);
         binding.pager.setAdapter(pagerAdapter);
 
         final int currentPosition = binding.pager.getCurrentItem();
@@ -246,6 +260,7 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
 
         updateTabsIconAndDescription();
         updateTitleForTab(binding.pager.getCurrentItem());
+        configuringTabs = false;
 
         hasTabsChanged = false;
     }
@@ -337,8 +352,14 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
             Log.d(TAG, "onTabSelected() called with: selectedTab = [" + selectedTab + "]");
         }
         updateTitleForTab(selectedTab.getPosition());
-        if (isShortsPosition(selectedTab.getPosition())) {
-            launchShortsPlayer();
+        if (!configuringTabs && !userSwipedPager && isShortsPosition(selectedTab.getPosition())
+                && binding != null) {
+            binding.pager.post(() -> {
+                if (!configuringTabs && !userSwipedPager
+                        && isShortsPosition(binding.pager.getCurrentItem())) {
+                    launchShortsPlayer();
+                }
+            });
         }
     }
 
@@ -351,7 +372,8 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
             Log.d(TAG, "onTabReselected() called with: tab = [" + tab + "]");
         }
         updateTitleForTab(tab.getPosition());
-        if (isShortsPosition(tab.getPosition())) {
+        if (!configuringTabs && isShortsPosition(tab.getPosition())) {
+            userSwipedPager = false;
             launchShortsPlayer();
         }
     }
