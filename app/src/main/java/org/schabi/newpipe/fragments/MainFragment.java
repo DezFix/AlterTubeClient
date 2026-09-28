@@ -278,6 +278,7 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
 
     private static final class SelectedTabsPagerAdapter
             extends FragmentStatePagerAdapterMenuWorkaround {
+        private static final String ADAPTER_TAG = "MainTabsPagerAdapter";
         private final Context context;
         private final List<Tab> internalTabsList;
 
@@ -344,7 +345,7 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
                 // simply recreated fresh by instantiateItem(). Crashing the app here
                 // is never the right answer.
                 if (DEBUG) {
-                    Log.w(TAG, "Ignoring stale tab pager state: " + e.getMessage());
+                    Log.w(ADAPTER_TAG, "Ignoring stale tab pager state: " + e.getMessage());
                 }
             }
         }
