@@ -9,6 +9,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -17,8 +19,13 @@ import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.FragmentRecommendedBinding;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.local.subscription.services.SubscriptionsImportService;
+import org.schabi.newpipe.player.playqueue.PlayQueue;
+import org.schabi.newpipe.player.playqueue.SinglePlayQueue;
 import org.schabi.newpipe.settings.NewPipeSettings;
 import org.schabi.newpipe.util.NavigationHelper;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.Single;
@@ -33,6 +40,7 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 public class RecommendedFragment extends Fragment {
 
     private static final String STATE_RESUMED_REFRESH = "recommended_refresh_on_resume";
+    private static final String KEY_LAST_UPDATED = "recommended_last_updated";
     private static final int RECOMMENDED_COLUMNS = 2;
 
     private FragmentRecommendedBinding binding;
@@ -43,6 +51,7 @@ public class RecommendedFragment extends Fragment {
     private boolean loading;
     private boolean refreshOnResume;
     private boolean lastPersonalized = true;
+    private long lastUpdatedMillis;
 
     public static RecommendedFragment newInstance() {
         return new RecommendedFragment();
@@ -87,6 +96,70 @@ public class RecommendedFragment extends Fragment {
                     .subscribe(this::startFeed, throwable -> finishWithError()));
         });
         binding.recommendedRetryButton.setOnClickListener(v -> reload());
+        binding.recommendedGenresButton.setOnClickListener(v -> openGenres());
+        binding.recommendedPopupButton.setOnClickListener(v -> playFeed(true));
+        binding.recommendedBackgroundButton.setOnClickListener(v -> playFeed(false));
+        lastUpdatedMillis = PreferenceManager.getDefaultSharedPreferences(requireContext())
+                .getLong(KEY_LAST_UPDATED, 0L);
+        updateStatus();
+    }
+
+    private void openGenres() {
+        final FragmentManager manager = getParentFragmentManager();
+        if (manager == null || manager.isStateSaved()) {
+            return;
+        }
+        manager.beginTransaction()
+                .replace(R.id.fragment_holder, GenresFragment.newInstance())
+                .addToBackStack(null)
+                .commit();
+    }
+
+    /**
+     * Starts the visible recommendations in the floating window (popup) or in the
+     * background player, exactly like the "Что нового" page does.
+     */
+    private void playFeed(final boolean popup) {
+        final List<StreamInfoItem> items = new ArrayList<>();
+        for (int i = 0; i < adapter.size(); i++) {
+            final RecommendedAdapter.Entry entry = adapter.getEntry(i);
+            if (entry != null) {
+                items.add(entry.getItem());
+            }
+        }
+        if (items.isEmpty()) {
+            Toast.makeText(requireContext(), R.string.recommended_empty, Toast.LENGTH_SHORT)
+                    .show();
+            return;
+        }
+        final PlayQueue queue = new SinglePlayQueue(items, 0);
+        if (popup) {
+            NavigationHelper.playOnPopupPlayer(requireContext(), queue, false);
+        } else {
+            NavigationHelper.playOnBackgroundPlayer(requireContext(), queue, false);
+        }
+    }
+
+    private void updateStatus() {
+        if (binding == null) {
+            return;
+        }
+        if (lastUpdatedMillis <= 0L) {
+            binding.recommendedUpdated.setText(R.string.recommended_never_updated);
+            return;
+        }
+        final long minutes = Math.max(0L,
+                (System.currentTimeMillis() - lastUpdatedMillis) / 60000L);
+        binding.recommendedUpdated.setText(minutes < 1L
+                ? getString(R.string.recommended_updated_now)
+                : getString(R.string.recommended_updated_minutes, minutes));
+    }
+
+    private void storeUpdatedTimestamp() {
+        lastUpdatedMillis = System.currentTimeMillis();
+        PreferenceManager.getDefaultSharedPreferences(requireContext()).edit()
+                .putLong(KEY_LAST_UPDATED, lastUpdatedMillis).apply();
+        updateStatus();
     }
 
     private boolean isNearEnd(final RecyclerView recyclerView) {
@@ -193,6 +266,9 @@ public class RecommendedFragment extends Fragment {
                     binding.recommendedLoading.setVisibility(View.GONE);
                     binding.recommendedSwipeRefresh.setRefreshing(false);
                     adapter.append(items);
+                    if (!items.isEmpty()) {
+                        storeUpdatedTimestamp();
+                    }
                     if (adapter.size() == 0 && engine.isExhausted()) {
                         showEmptyState();
                     }

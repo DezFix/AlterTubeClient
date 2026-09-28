@@ -69,7 +69,6 @@ import org.schabi.newpipe.util.ThemeHelper;
 import org.schabi.newpipe.util.external_communication.ShareUtils;
 import org.schabi.newpipe.util.urlfinder.UrlFinder;
 import org.schabi.newpipe.views.FocusOverlayView;
-import org.schabi.newpipe.views.ShortsPlayerActivity;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -194,10 +193,6 @@ public class RouterActivity extends AppCompatActivity {
                         UserAction.SHARE_TO_NEWPIPE, "Getting service from url: " + url))));
     }
 
-    private static boolean isShortsUrl(final String url) {
-        return url != null && url.contains("/shorts/");
-    }
-
     /**
      * @param context the context. It will be {@code finish()}ed at the end of the handling if it is
      *                an instance of {@link RouterActivity}.
@@ -263,13 +258,6 @@ public class RouterActivity extends AppCompatActivity {
     }
 
     protected void onSuccess() {
-        // Shorts links always go to the vertical player, regular videos keep the
-        // regular player, as the user asked.
-        if (currentLinkType == LinkType.STREAM && isShortsUrl(currentUrl)) {
-            startActivity(new Intent(this, ShortsPlayerActivity.class));
-            finish();
-            return;
-        }
         final SharedPreferences preferences = PreferenceManager
                 .getDefaultSharedPreferences(this);
         final String selectedChoiceKey = preferences

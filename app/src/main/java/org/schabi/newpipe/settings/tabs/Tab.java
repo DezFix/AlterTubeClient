@@ -168,7 +168,6 @@ public abstract class Tab {
         CHANNEL(new ChannelTab()),
         PLAYLIST(new PlaylistTab()),
         CHANNEL_GROUP(new ChannelGroupTab()),
-        SHORTS(new ShortsTab()),
         RECOMMENDED(new RecommendedTab());
 
         private final Tab tab;
@@ -742,31 +741,6 @@ public abstract class Tab {
 
         public String getGroupName() {
             return groupName;
-        }
-    }
-
-    public static class ShortsTab extends Tab {
-        public static final int ID = 10;
-
-        @Override
-        public int getTabId() {
-            return ID;
-        }
-
-        @Override
-        public String getTabName(final Context context) {
-            return context.getString(R.string.shorts_tab_title);
-        }
-
-        @DrawableRes
-        @Override
-        public int getTabIconRes(final Context context) {
-            return R.drawable.ic_movie;
-        }
-
-        @Override
-        public Fragment getFragment(final Context context) {
-            return BlankFragment.newShortsPlaceholder();
         }
     }
 

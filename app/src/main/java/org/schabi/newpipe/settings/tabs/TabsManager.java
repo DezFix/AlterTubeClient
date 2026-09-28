@@ -37,21 +37,25 @@ public final class TabsManager {
      */
     private static final int TABS_SCHEME_V3 = 3;
     /**
-     * v6: the Recommended tab is back and is the main page again, so it is prepended
+     * v6: the Recommended tab is the main page again, so it is prepended
      * to the stored tab list while the user keeps his own order for the rest.
+     * v7: the Shorts tab is gone, its id is dropped while parsing.
      */
     private static final int TABS_SCHEME_V6 = 6;
+    private static final int TABS_SCHEME_V7 = 7;
 
     public List<Tab> getTabs() {
         final String savedJson = sharedPreferences.getString(savedTabsKey, null);
         final int scheme = sharedPreferences.getInt(TABS_SCHEME_KEY, 0);
         try {
-            if (scheme < TABS_SCHEME_V6) {
+            if (scheme < TABS_SCHEME_V7) {
                 final List<Tab> tabs;
                 if (savedJson == null || savedJson.isEmpty()) {
                     tabs = getDefaultTabs();
-                } else {
+                } else if (scheme < TABS_SCHEME_V6) {
                     tabs = withRecommendedFirst(TabsJsonHelper.getTabsFromJson(savedJson));
+                } else {
+                    tabs = TabsJsonHelper.getTabsFromJson(savedJson);
                 }
                 saveTabsAndScheme(tabs);
                 return tabs;
@@ -82,7 +86,7 @@ public final class TabsManager {
     private void saveTabsAndScheme(final List<Tab> tabs) {
         sharedPreferences.edit()
                 .putString(savedTabsKey, TabsJsonHelper.getJsonToSave(tabs))
-                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V6)
+                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V7)
                 .apply();
     }
 
@@ -94,7 +98,7 @@ public final class TabsManager {
     public void resetTabs() {
         sharedPreferences.edit()
                 .remove(savedTabsKey)
-                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V6)
+                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V7)
                 .apply();
     }
 

@@ -42,7 +42,9 @@ public class RecommendationEngine {
     private static final int MAX_ITEMS_PER_CHANNEL = 2;
     private static final int MAX_CHANNELS_IN_BATCH = 8;
 
+    private final Context context;
     private final GenreProfileBuilder profile;
+    private final GenrePreferences genrePreferences;
     private final Set<String> seenUrls = new HashSet<>();
     private final List<Query> queries = new ArrayList<>();
     private final List<String> seedUrls = new ArrayList<>();
@@ -50,7 +52,9 @@ public class RecommendationEngine {
     private int seedIndex;
 
     public RecommendationEngine(final Context context, final GenreProfileBuilder profile) {
+        this.context = context.getApplicationContext();
         this.profile = profile;
+        this.genrePreferences = new GenrePreferences(this.context);
     }
 
     /** A single request together with the reason that is shown in the UI. */
@@ -98,16 +102,19 @@ public class RecommendationEngine {
                 seenUrls.add(url);
             }
         }
-        final List<String> genres = profile.getTopGenres();
+        final List<String> genres = effectiveGenres();
         for (final String genre : genres) {
             for (final String query : GenreDictionary.queriesFor(genre)) {
-                queries.add(new Query(query, GenreDictionary.displayName(genre),
+                queries.add(new Query(query, genrePreferences.displayName(genre),
                         RecommendedAdapter.REASON_GENRE));
             }
         }
         if (queries.isEmpty()) {
             // Genre is unknown: ask the subscribed channels for their new videos.
             for (final String name : profile.getSubscriptionNames()) {
+                if (isGenreBlockedName(name)) {
+                    continue;
+                }
                 queries.add(new Query(name + " новые видео", name,
                         RecommendedAdapter.REASON_SIMILAR));
                 queries.add(new Query(name + " выпуск", name,
@@ -118,6 +125,47 @@ public class RecommendationEngine {
             }
         }
         seedUrls.addAll(seedUrlsOfProfile());
+    }
+
+    /**
+     * Genres to query: the ones the user likes first, then the ones detected from history.
+     * Genres the user blocked are dropped, unless the user also liked them.
+     */
+    private List<String> effectiveGenres() {
+        final List<String> result = new ArrayList<>();
+        if (!genrePreferences.isEnabled()) {
+            return result;
+        }
+        for (final String genre : genrePreferences.getLiked()) {
+            if (!result.contains(genre)) {
+                result.add(genre);
+            }
+        }
+        for (final String genre : profile.getTopGenres()) {
+            if (genrePreferences.isBlocked(genre) || result.contains(genre)) {
+                continue;
+            }
+            result.add(genre);
+        }
+        return result;
+    }
+
+    /** Channel names are matched against the genre dictionary to honour blocked topics. */
+    private boolean isGenreBlockedName(final String name) {
+        if (!genrePreferences.isEnabled() || name == null) {
+            return false;
+        }
+        final Map<String, Integer> scores = GenreDictionary.score(name, name);
+        for (final String genre : genrePreferences.getBlocked()) {
+            if (genrePreferences.isLiked(genre)) {
+                continue;
+            }
+            final Integer score = scores.get(genre);
+            if (score != null && score >= 2) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean isEmpty() {
@@ -247,7 +295,33 @@ public class RecommendationEngine {
         if (item.getUploaderName() != null && item.getUploaderName().isEmpty()) {
             return false;
         }
-        return !ContentFilter.isPoliticsBlocked(item.getName(), item.getUploaderName());
+        if (ContentFilter.isPoliticsBlocked(item.getName(), item.getUploaderName())) {
+            return false;
+        }
+        return !isBlockedGenre(item);
+    }
+
+    /** Drops items that clearly belong to a genre the user does not want. */
+    private boolean isBlockedGenre(final StreamInfoItem item) {
+        if (!genrePreferences.isEnabled()) {
+            return false;
+        }
+        final Set<String> blocked = genrePreferences.getBlocked();
+        if (blocked.isEmpty()) {
+            return false;
+        }
+        final Map<String, Integer> scores =
+                GenreDictionary.score(item.getName(), item.getUploaderName());
+        for (final String genre : blocked) {
+            if (genrePreferences.isLiked(genre)) {
+                continue;
+            }
+            final Integer score = scores.get(genre);
+            if (score != null && score >= 3) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static long uploadTime(final StreamInfoItem item) {
