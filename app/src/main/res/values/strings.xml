@@ -279,6 +279,11 @@
     <string name="recommended_import_subscriptions">Import subscriptions</string>
     <string name="recommended_reason_genre">Genre: %1$s</string>
     <string name="recommended_reason_similar">Similar to: %1$s</string>
+    <string name="shorts_tab_title">Shorts</string>
+    <string name="shorts_open_player">Open Shorts</string>
+    <string name="shorts_feed_empty">No Shorts found. Watch some videos first, so the feed can pick your genres.</string>
+    <string name="shorts_playback_error">This Short couldn\'t be played</string>
+    <string name="shorts_open_as_video">Open as video</string>
     <string name="short_thousand">k</string>
 <string name="short_million">M</string>
 <string name="short_billion">B</string>
