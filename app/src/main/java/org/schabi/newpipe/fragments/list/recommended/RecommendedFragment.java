@@ -1,5 +1,6 @@
 package org.schabi.newpipe.fragments.list.recommended;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -53,9 +54,32 @@ public class RecommendedFragment extends Fragment {
     private boolean refreshOnResume;
     private boolean lastPersonalized = true;
     private long lastUpdatedMillis;
+    private SharedPreferences genrePreferences;
+    private final SharedPreferences.OnSharedPreferenceChangeListener genreChangeListener =
+            (preferences, key) -> {
+                if (GenrePreferences.settingKeys().contains(key)) {
+                    refreshOnResume = true;
+                }
+            };
 
     public static RecommendedFragment newInstance() {
         return new RecommendedFragment();
+    }
+
+    @Override
+    public void onCreate(@Nullable final Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        genrePreferences = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        genrePreferences.registerOnSharedPreferenceChangeListener(genreChangeListener);
+    }
+
+    @Override
+    public void onDestroy() {
+        if (genrePreferences != null) {
+            genrePreferences.unregisterOnSharedPreferenceChangeListener(genreChangeListener);
+            genrePreferences = null;
+        }
+        super.onDestroy();
     }
 
     @Nullable

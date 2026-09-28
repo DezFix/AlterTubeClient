@@ -92,10 +92,15 @@
     <string name="recommended_play_in_background">Играть в фоне</string>
     <string name="recommended_genres_title">Темы</string>
     <string name="recommended_genres_summary">Отметь темы, которые нравятся — они будут первыми. Отметь ненравящиеся — они отфильтруются вместе с новостями и политикой.</string>
+    <string name="recommended_genres_settings_summary">Любимые и скрытые темы для рекомендаций</string>
+    <string name="recommended_genres_enable_title">Учитывать темы</string>
+    <string name="recommended_genres_enable_summary">Показывать любимые темы первыми и скрывать заблокированные.</string>
     <string name="recommended_genre_like">Нравится</string>
-    <string name="recommended_genre_like_on">Нравится ✓</string>
     <string name="recommended_genre_blocked">Скрыть</string>
-    <string name="recommended_genre_blocked_on">Скрыто</string>
+    <string name="recommended_genre_boosted">Будет чаще</string>
+    <string name="recommended_genre_hidden">Скрыто из рекомендаций</string>
+    <string name="recommended_genre_standard">Обычный подбор</string>
+    <string name="recommended_genre_disabled">Темы отключены</string>
     <string name="recommended_genres_reset">Сбросить</string>
     <string name="genre_games">Игры</string>
     <string name="genre_food">Еда и рецепты</string>

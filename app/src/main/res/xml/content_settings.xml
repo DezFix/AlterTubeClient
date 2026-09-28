@@ -3,6 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:title="@string/content">
 
+    <Preference
+        android:fragment="org.schabi.newpipe.fragments.list.recommended.GenresFragment"
+        android:icon="@drawable/ic_stars"
+        android:summary="@string/recommended_genres_settings_summary"
+        android:title="@string/recommended_genres_title"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <ListPreference
         android:defaultValue="@string/default_localization_key"
         android:entries="@array/app_language_name"

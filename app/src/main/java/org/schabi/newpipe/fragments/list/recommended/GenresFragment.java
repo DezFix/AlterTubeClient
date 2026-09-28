@@ -11,6 +11,8 @@ import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.switchmaterial.SwitchMaterial;
+
 import org.schabi.newpipe.BaseFragment;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.FragmentGenresBinding;
@@ -46,6 +48,11 @@ public class GenresFragment extends BaseFragment {
         adapter = new GenreAdapter();
         binding.genresList.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.genresList.setAdapter(adapter);
+        binding.genresEnabledSwitch.setChecked(preferences.isEnabled());
+        binding.genresEnabledSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            preferences.setEnabled(isChecked);
+            adapter.notifyDataSetChanged();
+        });
         binding.genresResetButton.setOnClickListener(v -> {
             preferences.clear();
             adapter.notifyDataSetChanged();
@@ -56,6 +63,9 @@ public class GenresFragment extends BaseFragment {
     public void onResume() {
         super.onResume();
         setTitle(getString(R.string.recommended_genres_title));
+        if (binding != null) {
+            binding.genresEnabledSwitch.setChecked(preferences.isEnabled());
+        }
         if (adapter != null) {
             adapter.notifyDataSetChanged();
         }
@@ -80,21 +90,48 @@ public class GenresFragment extends BaseFragment {
         @Override
         public void onBindViewHolder(@NonNull final Holder holder, final int position) {
             final String genre = GenrePreferences.genres().get(position);
+            final boolean topicsEnabled = preferences.isEnabled();
+            final boolean liked = topicsEnabled && preferences.isLiked(genre);
+            final boolean hidden = topicsEnabled && preferences.isBlocked(genre);
+
             holder.name.setText(preferences.displayName(genre));
-            holder.likeButton.setText(preferences.isLiked(genre)
-                    ? R.string.recommended_genre_like_on : R.string.recommended_genre_like);
-            holder.likeButton.setSelected(preferences.isLiked(genre));
-            holder.blockButton.setText(preferences.isBlocked(genre)
-                    ? R.string.recommended_genre_blocked_on : R.string.recommended_genre_blocked);
-            holder.blockButton.setSelected(preferences.isBlocked(genre));
-            holder.likeButton.setOnClickListener(v -> {
-                preferences.toggleLiked(genre);
-                notifyDataSetChanged();
-            });
-            holder.blockButton.setOnClickListener(v -> {
-                preferences.toggleBlocked(genre);
-                notifyDataSetChanged();
-            });
+            holder.status.setText(statusRes(topicsEnabled, liked, hidden));
+            setSwitch(holder.likeSwitch, liked, topicsEnabled,
+                    (buttonView, isChecked) -> {
+                        preferences.setLiked(genre, isChecked);
+                        notifyItemChanged(position);
+                    });
+            setSwitch(holder.hideSwitch, hidden, topicsEnabled,
+                    (buttonView, isChecked) -> {
+                        preferences.setBlocked(genre, isChecked);
+                        notifyItemChanged(position);
+                    });
+        }
+
+        private int statusRes(final boolean topicsEnabled,
+                              final boolean liked,
+                              final boolean hidden) {
+            if (!topicsEnabled) {
+                return R.string.recommended_genre_disabled;
+            }
+            if (liked) {
+                return R.string.recommended_genre_boosted;
+            }
+            if (hidden) {
+                return R.string.recommended_genre_hidden;
+            }
+            return R.string.recommended_genre_standard;
+        }
+
+        private void setSwitch(final SwitchMaterial switchView,
+                               final boolean checked,
+                               final boolean enabled,
+                               final android.widget.CompoundButton.OnCheckedChangeListener listener) {
+            switchView.setOnCheckedChangeListener(null);
+            switchView.setChecked(checked);
+            switchView.setEnabled(enabled);
+            switchView.setAlpha(enabled ? 1.0f : 0.5f);
+            switchView.setOnCheckedChangeListener(listener);
         }
 
         @Override
@@ -104,14 +141,16 @@ public class GenresFragment extends BaseFragment {
 
         class Holder extends RecyclerView.ViewHolder {
             final TextView name;
-            final TextView likeButton;
-            final TextView blockButton;
+            final TextView status;
+            final SwitchMaterial likeSwitch;
+            final SwitchMaterial hideSwitch;
 
             Holder(@NonNull final View itemView) {
                 super(itemView);
                 name = itemView.findViewById(R.id.genre_name);
-                likeButton = itemView.findViewById(R.id.genre_like);
-                blockButton = itemView.findViewById(R.id.genre_block);
+                status = itemView.findViewById(R.id.genre_status);
+                likeSwitch = itemView.findViewById(R.id.genre_like_switch);
+                hideSwitch = itemView.findViewById(R.id.genre_hide_switch);
             }
         }
     }

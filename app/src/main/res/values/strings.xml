@@ -282,10 +282,15 @@
     <string name="recommended_play_in_background">Play in background</string>
     <string name="recommended_genres_title">Topics</string>
     <string name="recommended_genres_summary">Mark the topics you like — they are shown first. Mark the ones you do not want — they are filtered out together with news and politics.</string>
+    <string name="recommended_genres_settings_summary">Favorite and hidden topics for recommendations</string>
+    <string name="recommended_genres_enable_title">Use topics</string>
+    <string name="recommended_genres_enable_summary">Give priority to liked topics and hide blocked topics.</string>
     <string name="recommended_genre_like">Like</string>
-    <string name="recommended_genre_like_on">Liked</string>
     <string name="recommended_genre_blocked">Hide</string>
-    <string name="recommended_genre_blocked_on">Hidden</string>
+    <string name="recommended_genre_boosted">Shown first</string>
+    <string name="recommended_genre_hidden">Hidden from recommendations</string>
+    <string name="recommended_genre_standard">Standard recommendations</string>
+    <string name="recommended_genre_disabled">Topics are off</string>
     <string name="recommended_genres_reset">Reset</string>
     <string name="genre_games">Games</string>
     <string name="genre_food">Food and recipes</string>

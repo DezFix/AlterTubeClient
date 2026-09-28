@@ -56,6 +56,10 @@ public class GenrePreferences {
         return GENRES;
     }
 
+    public static List<String> settingKeys() {
+        return Arrays.asList(KEY_ENABLED, KEY_LIKED, KEY_BLOCKED);
+    }
+
     public boolean isEnabled() {
         return preferences.getBoolean(KEY_ENABLED, true);
     }
@@ -72,12 +76,12 @@ public class GenrePreferences {
         return readSet(KEY_BLOCKED);
     }
 
-    public void toggleLiked(final String genre) {
-        toggle(KEY_LIKED, genre);
+    public void setLiked(final String genre, final boolean liked) {
+        setState(KEY_LIKED, genre, liked);
     }
 
-    public void toggleBlocked(final String genre) {
-        toggle(KEY_BLOCKED, genre);
+    public void setBlocked(final String genre, final boolean blocked) {
+        setState(KEY_BLOCKED, genre, blocked);
     }
 
     public void clear() {
@@ -105,19 +109,25 @@ public class GenrePreferences {
         }
     }
 
-    private void toggle(final String key, final String genre) {
+    private void setState(final String key, final String genre, final boolean selected) {
         if (genre == null) {
             return;
         }
         final Set<String> current = readSet(key);
-        if (current.contains(genre)) {
-            current.remove(genre);
-        } else {
+        if (selected) {
             current.add(genre);
-            // A genre cannot be liked and blocked at the same time.
-            readSet(KEY_LIKED.equals(key) ? KEY_BLOCKED : KEY_LIKED).remove(genre);
+        } else {
+            current.remove(genre);
         }
-        preferences.edit().putStringSet(key, new LinkedHashSet<>(current)).apply();
+        final Set<String> other = readSet(KEY_LIKED.equals(key) ? KEY_BLOCKED : KEY_LIKED);
+        if (selected) {
+            // A genre cannot be liked and hidden at the same time.
+            other.remove(genre);
+        }
+        preferences.edit()
+                .putStringSet(key, new LinkedHashSet<>(current))
+                .putStringSet(KEY_LIKED.equals(key) ? KEY_BLOCKED : KEY_LIKED, other)
+                .apply();
     }
 
     private Set<String> readSet(final String key) {
