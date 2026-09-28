@@ -9,20 +9,16 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentManager;
-import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.FragmentRecommendedBinding;
-import org.schabi.newpipe.extractor.ServiceList;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.local.subscription.services.SubscriptionsImportService;
 import org.schabi.newpipe.settings.NewPipeSettings;
 import org.schabi.newpipe.util.NavigationHelper;
-
-import java.util.List;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.Single;
@@ -37,6 +33,7 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 public class RecommendedFragment extends Fragment {
 
     private static final String STATE_RESUMED_REFRESH = "recommended_refresh_on_resume";
+    private static final int RECOMMENDED_COLUMNS = 2;
 
     private FragmentRecommendedBinding binding;
     private RecommendedAdapter adapter;
@@ -69,7 +66,8 @@ public class RecommendedFragment extends Fragment {
         }
         adapter = new RecommendedAdapter();
         adapter.setClickListener(this::openItem);
-        binding.recommendedList.setLayoutManager(new LinearLayoutManager(requireContext()));
+        binding.recommendedList.setLayoutManager(
+                new GridLayoutManager(requireContext(), RECOMMENDED_COLUMNS));
         binding.recommendedList.setAdapter(adapter);
         binding.recommendedList.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
@@ -89,23 +87,15 @@ public class RecommendedFragment extends Fragment {
                     .subscribe(this::startFeed, throwable -> finishWithError()));
         });
         binding.recommendedRetryButton.setOnClickListener(v -> reload());
-        binding.recommendedImportButton.setOnClickListener(v -> {
-            final FragmentManager manager = getParentFragmentManager();
-            if (manager != null && !manager.isStateSaved()) {
-                NavigationHelper.openSubscriptionsImportFragment(manager,
-                        ServiceList.YouTube.getServiceId());
-            }
-        });
     }
 
     private boolean isNearEnd(final RecyclerView recyclerView) {
-        final LinearLayoutManager manager =
-                (LinearLayoutManager) recyclerView.getLayoutManager();
+        final GridLayoutManager manager = (GridLayoutManager) recyclerView.getLayoutManager();
         if (manager == null) {
             return false;
         }
         final int lastVisible = manager.findLastVisibleItemPosition();
-        return lastVisible >= adapter.size() - 4;
+        return lastVisible >= adapter.size() - RECOMMENDED_COLUMNS * 2;
     }
 
     @Override
@@ -177,7 +167,6 @@ public class RecommendedFragment extends Fragment {
             showEmptyState();
             return;
         }
-        updateSummary();
         binding.recommendedLoading.setVisibility(View.VISIBLE);
         loadMore();
     }
@@ -215,26 +204,6 @@ public class RecommendedFragment extends Fragment {
                     }
                     finishWithError();
                 }));
-    }
-
-    private void updateSummary() {
-        if (binding == null || engine == null) {
-            return;
-        }
-        final List<String> genres = engine.getProfile().getTopGenres();
-        if (genres.isEmpty()) {
-            binding.recommendedSummary.setText(R.string.recommended_non_personalized_summary);
-        } else {
-            final StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < genres.size(); i++) {
-                if (i > 0) {
-                    builder.append(", ");
-                }
-                builder.append(GenreDictionary.displayName(genres.get(i)));
-            }
-            binding.recommendedSummary.setText(getString(
-                    R.string.recommended_personalized_summary, builder.toString()));
-        }
     }
 
     private void showEmptyState() {

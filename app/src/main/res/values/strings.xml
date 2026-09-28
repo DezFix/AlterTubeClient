@@ -272,11 +272,7 @@
     <string name="youtube_sync_login_required">Log in to YouTube first</string>
     <string name="recommended_tab_title">Recommended</string>
     <string name="recommended_error">Couldn\'t load recommendations</string>
-    <string name="recommended_empty">Nothing to recommend yet. Watch a few videos or import your subscriptions — the feed is built from your genres, not from a generic list.</string>
-    <string name="recommended_for_you_title">For you</string>
-    <string name="recommended_personalized_summary">Genres: %1$s</string>
-    <string name="recommended_non_personalized_summary">Your taste is not clear yet — showing new videos from your subscriptions</string>
-    <string name="recommended_import_subscriptions">Import subscriptions</string>
+    <string name="recommended_empty">Nothing to recommend yet. Watch a few videos, and the feed will pick videos of the same genres.</string>
     <string name="recommended_reason_genre">Genre: %1$s</string>
     <string name="recommended_reason_similar">Similar to: %1$s</string>
     <string name="shorts_tab_title">Shorts</string>
