@@ -9,12 +9,14 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.FragmentRecommendedBinding;
+import org.schabi.newpipe.extractor.ServiceList;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.local.subscription.services.SubscriptionsImportService;
 import org.schabi.newpipe.settings.NewPipeSettings;
@@ -87,8 +89,13 @@ public class RecommendedFragment extends Fragment {
                     .subscribe(this::startFeed, throwable -> finishWithError()));
         });
         binding.recommendedRetryButton.setOnClickListener(v -> reload());
-        binding.recommendedImportButton.setOnClickListener(v ->
-                NavigationHelper.openSubscriptionsImportFragment(requireContext()));
+        binding.recommendedImportButton.setOnClickListener(v -> {
+            final FragmentManager manager = getParentFragmentManager();
+            if (manager != null && !manager.isStateSaved()) {
+                NavigationHelper.openSubscriptionsImportFragment(manager,
+                        ServiceList.YouTube.getServiceId());
+            }
+        });
     }
 
     private boolean isNearEnd(final RecyclerView recyclerView) {
