@@ -55,7 +55,7 @@ public class GenresFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        setTitle(R.string.recommended_genres_title);
+        setTitle(getString(R.string.recommended_genres_title));
         if (adapter != null) {
             adapter.notifyDataSetChanged();
         }
