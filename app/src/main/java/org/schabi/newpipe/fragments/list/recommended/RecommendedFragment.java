@@ -8,9 +8,10 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 import androidx.preference.PreferenceManager;
+
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -105,8 +106,15 @@ public class RecommendedFragment extends Fragment {
     }
 
     private void openGenres() {
-        final FragmentManager manager = getParentFragmentManager();
-        if (manager == null || manager.isStateSaved()) {
+        // fragment_holder lives in the activity layout, so the transaction has to be done
+        // on the activity fragment manager. Using the parent manager crashed with
+        // "No view found for id fragment_holder".
+        final FragmentActivity activity = getActivity();
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+            return;
+        }
+        final FragmentManager manager = activity.getSupportFragmentManager();
+        if (manager.isStateSaved() || manager.isDestroyed()) {
             return;
         }
         manager.beginTransaction()
