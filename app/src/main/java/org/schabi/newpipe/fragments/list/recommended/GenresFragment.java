@@ -8,10 +8,10 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.schabi.newpipe.BaseFragment;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.databinding.FragmentGenresBinding;
 
@@ -19,7 +19,7 @@ import org.schabi.newpipe.databinding.FragmentGenresBinding;
  * "Темы": pick the genres you like and the genres you do not want to see. Liked genres are
  * boosted in the recommendations, blocked genres are dropped.
  */
-public class GenresFragment extends Fragment {
+public class GenresFragment extends BaseFragment {
 
     private FragmentGenresBinding binding;
     private GenrePreferences preferences;
