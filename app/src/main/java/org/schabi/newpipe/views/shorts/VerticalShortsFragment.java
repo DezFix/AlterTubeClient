@@ -408,14 +408,15 @@ public class VerticalShortsFragment extends Fragment implements ShortsPagerAdapt
                     || resolving.putIfAbsent(i, Boolean.TRUE) != null) {
                 continue;
             }
+            final int prefetchIndex = i;
             disposables.add(ExtractorHelper
                     .getStreamInfo(ServiceList.YouTube.getServiceId(), item.getUrl(), false)
                     .subscribeOn(Schedulers.io())
                     .observeOn(AndroidSchedulers.mainThread())
-                    .doFinally(() -> resolving.remove(i))
+                    .doFinally(() -> resolving.remove(prefetchIndex))
                     .subscribe(info -> {
                         if (hasVideoStreams(info)) {
-                            infoCache.put(i, info);
+                            infoCache.put(prefetchIndex, info);
                         }
                     }, throwable -> { }));
         }
