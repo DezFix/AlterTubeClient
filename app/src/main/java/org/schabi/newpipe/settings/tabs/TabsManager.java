@@ -8,6 +8,7 @@ import androidx.preference.PreferenceManager;
 
 import org.schabi.newpipe.R;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class TabsManager {
@@ -36,21 +37,21 @@ public final class TabsManager {
      */
     private static final int TABS_SCHEME_V3 = 3;
     /**
-     * v5: the Recommended tab is gone, so stored tab lists are migrated once more.
-     * Unknown tab ids (the removed Recommended tab) are dropped while parsing.
+     * v6: the Recommended tab is back and is the main page again, so it is prepended
+     * to the stored tab list while the user keeps his own order for the rest.
      */
-    private static final int TABS_SCHEME_V5 = 5;
+    private static final int TABS_SCHEME_V6 = 6;
 
     public List<Tab> getTabs() {
         final String savedJson = sharedPreferences.getString(savedTabsKey, null);
         final int scheme = sharedPreferences.getInt(TABS_SCHEME_KEY, 0);
         try {
-            if (scheme < TABS_SCHEME_V5) {
+            if (scheme < TABS_SCHEME_V6) {
                 final List<Tab> tabs;
                 if (savedJson == null || savedJson.isEmpty()) {
                     tabs = getDefaultTabs();
                 } else {
-                    tabs = TabsJsonHelper.getTabsFromJson(savedJson);
+                    tabs = withRecommendedFirst(TabsJsonHelper.getTabsFromJson(savedJson));
                 }
                 saveTabsAndScheme(tabs);
                 return tabs;
@@ -64,10 +65,24 @@ public final class TabsManager {
         }
     }
 
+    private List<Tab> withRecommendedFirst(final List<Tab> tabs) {
+        final List<Tab> result = new ArrayList<>();
+        for (final Tab tab : tabs) {
+            if (tab.getTabId() != Tab.Type.RECOMMENDED.getTabId()) {
+                result.add(tab);
+            }
+        }
+        if (result.isEmpty()) {
+            return getDefaultTabs();
+        }
+        result.add(0, Tab.Type.RECOMMENDED.getTab());
+        return result;
+    }
+
     private void saveTabsAndScheme(final List<Tab> tabs) {
         sharedPreferences.edit()
                 .putString(savedTabsKey, TabsJsonHelper.getJsonToSave(tabs))
-                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V5)
+                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V6)
                 .apply();
     }
 
@@ -79,7 +94,7 @@ public final class TabsManager {
     public void resetTabs() {
         sharedPreferences.edit()
                 .remove(savedTabsKey)
-                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V5)
+                .putInt(TABS_SCHEME_KEY, TABS_SCHEME_V6)
                 .apply();
     }
 

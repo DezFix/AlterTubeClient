@@ -80,6 +80,15 @@
     <string name="youtube_subscription_sync_complete">Подписки импортированы: добавлено %1$d, найдено %2$d</string>
     <string name="youtube_subscription_sync_failed">Не удалось синхронизировать подписки YouTube</string>
     <string name="youtube_sync_login_required">Сначала войдите в YouTube</string>
+    <string name="recommended_tab_title">Рекомендации</string>
+    <string name="recommended_error">Не удалось загрузить рекомендации</string>
+    <string name="recommended_empty">Пока нечего порекомендовать. Посмотри несколько видео или импортируй подписки — лента строится по твоим жанрам, а не по общему списку.</string>
+    <string name="recommended_for_you_title">Для вас</string>
+    <string name="recommended_personalized_summary">Жанры: %1$s</string>
+    <string name="recommended_non_personalized_summary">Пока непонятно, что ты смотришь — показываем новые видео из подписок</string>
+    <string name="recommended_import_subscriptions">Импорт подписок</string>
+    <string name="recommended_reason_genre">Жанр: %1$s</string>
+    <string name="recommended_reason_similar">Похоже на: %1$s</string>
     <string name="could_not_load_thumbnails">Не удалось загрузить все миниатюры</string>
     <string name="youtube_signature_deobfuscation_error">Не удалось расшифровать подпись URL у видео</string>
     <string name="controls_background_title">В фоне</string>

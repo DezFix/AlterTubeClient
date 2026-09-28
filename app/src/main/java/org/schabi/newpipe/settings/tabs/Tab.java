@@ -23,6 +23,7 @@ import org.schabi.newpipe.fragments.list.channel.ChannelVideosFragment;
 import org.schabi.newpipe.fragments.list.kiosk.DefaultKioskFragment;
 import org.schabi.newpipe.fragments.list.kiosk.KioskFragment;
 import org.schabi.newpipe.fragments.list.playlist.PlaylistFragment;
+import org.schabi.newpipe.fragments.list.recommended.RecommendedFragment;
 import org.schabi.newpipe.local.bookmark.BookmarkFragment;
 import org.schabi.newpipe.local.feed.FeedFragment;
 import org.schabi.newpipe.local.history.StatisticsPlaylistFragment;
@@ -166,7 +167,8 @@ public abstract class Tab {
         KIOSK(new KioskTab()),
         CHANNEL(new ChannelTab()),
         PLAYLIST(new PlaylistTab()),
-        CHANNEL_GROUP(new ChannelGroupTab());
+        CHANNEL_GROUP(new ChannelGroupTab()),
+        RECOMMENDED(new RecommendedTab());
 
         private final Tab tab;
 
@@ -739,6 +741,31 @@ public abstract class Tab {
 
         public String getGroupName() {
             return groupName;
+        }
+    }
+
+    public static class RecommendedTab extends Tab {
+        public static final int ID = 11;
+
+        @Override
+        public int getTabId() {
+            return ID;
+        }
+
+        @Override
+        public String getTabName(final Context context) {
+            return context.getString(R.string.recommended_tab_title);
+        }
+
+        @DrawableRes
+        @Override
+        public int getTabIconRes(final Context context) {
+            return R.drawable.ic_stars;
+        }
+
+        @Override
+        public Fragment getFragment(final Context context) {
+            return RecommendedFragment.newInstance();
         }
     }
 }
