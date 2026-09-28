@@ -12,6 +12,7 @@ import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Parcelable;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -187,9 +188,15 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
         tabsList.clear();
         tabsList.addAll(tabsManager.getTabs());
 
-        if (pagerAdapter == null || !pagerAdapter.sameTabs(tabsList)) {
+        if (pagerAdapter == null) {
             pagerAdapter = new SelectedTabsPagerAdapter(requireContext(),
                     getChildFragmentManager(), tabsList);
+        } else if (!pagerAdapter.sameTabs(tabsList)) {
+            // Reuse the same adapter instance so its saved state always matches the
+            // fragments in the child fragment manager. Creating a new adapter here used
+            // to orphan the previous pages and later crash with
+            // "Fragment no longer exists for key f0" on back navigation.
+            pagerAdapter.updateTabs(tabsList);
         }
 
         configuringTabs = true;
@@ -316,6 +323,30 @@ public class MainFragment extends BaseFragment implements TabLayout.OnTabSelecte
 
         public boolean sameTabs(final List<Tab> tabsToCompare) {
             return internalTabsList.equals(tabsToCompare);
+        }
+
+        public void updateTabs(final List<Tab> newTabs) {
+            internalTabsList.clear();
+            internalTabsList.addAll(newTabs);
+            // getItemPosition() returns POSITION_NONE, so every page is cleanly
+            // destroyed and rebuilt through the adapter instead of leaking.
+            notifyDataSetChanged();
+        }
+
+        @Override
+        public void restoreState(final Parcelable state, final ClassLoader loader) {
+            try {
+                super.restoreState(state, loader);
+            } catch (final IllegalStateException e) {
+                // The saved snapshot references pages that no longer exist in the child
+                // fragment manager (e.g. the tab set changed between save and restore).
+                // Pages restored before the failure stay valid; the missing ones are
+                // simply recreated fresh by instantiateItem(). Crashing the app here
+                // is never the right answer.
+                if (DEBUG) {
+                    Log.w(TAG, "Ignoring stale tab pager state: " + e.getMessage());
+                }
+            }
         }
     }
 }
