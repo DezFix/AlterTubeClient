@@ -19,10 +19,10 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlayer;
-import com.google.android.exoplayer2.MediaSource;
 import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.audio.AudioAttributes;
+import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 
 import org.schabi.newpipe.DownloaderImpl;
@@ -486,11 +486,12 @@ public class VerticalShortsFragment extends Fragment implements ShortsPagerAdapt
     @Override
     public void onAuthorClick(@NonNull final ShortsVideoItem item) {
         final String url = item.getInfo().getUploaderUrl();
-        if (url == null || url.isEmpty()) {
+        final String name = item.getAuthor();
+        if (url == null || url.isEmpty() || name == null || name.isEmpty()) {
             return;
         }
-        NavigationHelper.openChannelFragment(requireContext(),
-                ServiceList.YouTube.getServiceId(), url, item.getAuthor());
+        NavigationHelper.openChannelFragmentUsingIntent(requireContext(),
+                ServiceList.YouTube.getServiceId(), url, name);
     }
 
     /** Opens the current video in the regular player. */
