@@ -258,10 +258,12 @@ public final class ServiceHelper {
                 .getDefaultSharedPreferences(context);
         
         // Build configuration objects
+        // Shorts are always blocked in AlterTube: the user asked for feeds without
+        // short videos, so the stored filter_shorts preference is ignored on purpose.
         FilterConfig filterConfig = new FilterConfig(
             new ArrayList<>(sharedPreferences.getStringSet(context.getString(R.string.filter_by_keyword_key) + "_set", new HashSet<>())),
             new ArrayList<>(sharedPreferences.getStringSet(context.getString(R.string.filter_by_channel_key) + "_set", new HashSet<>())),
-            sharedPreferences.getBoolean(context.getString(R.string.filter_shorts_key), false),
+            true,
             sharedPreferences.getBoolean(context.getString(R.string.filter_paid_contents_key), false)
         );
         

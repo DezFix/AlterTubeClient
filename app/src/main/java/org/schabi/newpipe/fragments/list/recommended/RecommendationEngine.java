@@ -288,6 +288,11 @@ public class RecommendationEngine {
         if (item.getStreamType() != StreamType.VIDEO_STREAM) {
             return false;
         }
+        // Shorts are blocked everywhere in AlterTube, including recommendations.
+        final String url = item.getUrl() == null ? "" : item.getUrl();
+        if (item.isShortFormContent() || url.contains("/shorts/")) {
+            return false;
+        }
         final long duration = item.getDuration();
         if (duration > 0 && (duration < MIN_DURATION_SECONDS || duration > MAX_DURATION_SECONDS)) {
             return false;
